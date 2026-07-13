@@ -1,6 +1,6 @@
-# CHANGES — Full Optimization Catalog
+# CHANGES — FPSOptimization Full Catalog
 
-Every change PCOptimizationServices will apply, organized by level and module. Each entry lists **What / Why / How (exact implementation) / Revert**. This catalog is derived from a real, verified optimization pass on a Ryzen 7 5800X3D + RTX 4070 Ti Windows 11 Home rig (~100 → ~200 FPS in Warzone), generalized to be portable to any Windows 11 gaming PC.
+Every change FPSOptimization will apply, organized by level and module. Each entry lists **What / Why / How (exact implementation) / Revert**. This catalog is derived from a real, verified optimization pass on a Ryzen 7 5800X3D + RTX 4070 Ti Windows 11 Home rig (~100 → ~200 FPS in Warzone), generalized to be portable to any Windows 11 gaming PC.
 
 Legend: 🟢 = no functional loss · 🟡 = removes a feature some users need (guarded by detection or prompt) · 🔴 = deliberate security/functionality trade-off (explicit consent required)
 
@@ -91,7 +91,7 @@ Legend: 🟢 = no functional loss · 🟡 = removes a feature some users need (g
 | 1.16 🟢 | USB selective suspend OFF | Prevents input-device latency/wake hitches | `powercfg /setacvalueindex` on active scheme, USB subgroup |
 | 1.17 🟢 | PCIe Link State Power Management OFF | GPU link never down-clocks into a latency penalty | `powercfg /setacvalueindex` PCIe ASPM = Off |
 | 1.18 🟢 | Mouse acceleration OFF | Raw 1:1 aim (every FPS player wants this) | `HKCU\Control Panel\Mouse` → `MouseSpeed=0`, `MouseThreshold1=0`, `MouseThreshold2=0` |
-| 1.19 🟢 | MMCSS gaming profile | Network throttling off + more CPU share for games | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile` → `NetworkThrottlingIndex=0xFFFFFFFF`, `SystemResponsiveness=10` |
+| 1.19 🟢 | MMCSS gaming profile | Network throttling off + more CPU share for games | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile` → `NetworkThrottlingIndex=0xFFFFFFFF`, `SystemResponsiveness=0` (10 also accepted) |
 
 **Revert:** logged prior values restored.
 
