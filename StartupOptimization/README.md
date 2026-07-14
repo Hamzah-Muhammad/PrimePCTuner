@@ -1,25 +1,38 @@
 # StartupOptimization
 
-**Status: PLANNED — scope documented, not yet built.** The startup-junk tool of the [PCOptimizationServices](../README.md) suite. Same pattern as FPSOptimization: detect, list every removal as a checkbox, dry-run first, undo logging.
+**Status: v0.1 — dry-run GUI.** The startup-junk tool of the [PCOptimizationServices](../README.md) suite, aimed at **everyday PCs, not gaming rigs** — the toned-down cleaner. Same pattern as FPSOptimization: detect, list every removal as a checkbox, auto-scan on launch, dry-run first.
 
-## Planned scope
+```powershell
+.\Start-StartupOptimization.ps1            # self-elevates, opens the GUI
+.\Start-StartupOptimization.ps1 -SelfTest  # build the window headless + exit
+```
 
-Everything that launches without being asked, across all the places Windows hides them:
+## How it differs from FPSOptimization
 
-| Surface | What the tool will do |
-|---|---|
-| **Run keys** (`HKLM`/`HKCU ...\CurrentVersion\Run`, RunOnce) | List every entry with its publisher/target; checkbox removal. Detects vendor drift — apps that re-add themselves after updates (audio drivers, VPN clients, Edge autolaunch) |
-| **Startup folders** (user + common) | Enumerate and offer removal of shortcuts |
-| **Logon scheduled tasks** | The hidden startup surface most tools miss: Office logon tasks (re-enabled by every Office update), updater tasks, vendor helpers. Distinguishes logon-triggered tasks (startup cost) from periodic ones (keep — e.g. WebView2 security updates) |
-| **StartupApproved leftovers** | Purge inert toggle entries whose backing Run entry is gone. Gotcha handled: value names can have trailing spaces — the tool matches exact registry names, not trimmed ones |
-| **Services set to Automatic that don't need to be** | Report-only cross-reference with FPSOptimization's service catalog |
+The FPS catalog is a **static, verified baseline** (the same 52 checks on every PC). This tool's catalog is **built dynamically at launch** — it enumerates whatever is actually set to start on *this* PC, so the checklist is different on every machine. That's what makes it fit general clients.
 
-## Planned guardrails
+## What it scans (3 groups)
 
-- **Keep-list first:** security tray (SecurityHealth), the user's actual peripherals' software (mouse/RGB/fan control), and anything the user marks keep — never suggested for removal twice after a "keep" decision.
-- **Anticheat aware:** kernel-level anticheat startup entries (e.g. Riot Vanguard) are flagged with an explanation, not silently removed — disabling them breaks game launches and needs a reboot-aware toggle, not deletion.
-- **Updater tasks:** logon-triggered updater tasks can be disabled, but periodic security-update tasks (Edge/WebView2 UA task) are kept by default with a warning if unchecked.
-- **Drift re-audit:** vendors re-add their entries on every update — the tool's audit mode diffs against the last approved state and reports only what came back.
+| Group | Surface | Behavior |
+|---|---|---|
+| **STARTUP APPS** | Registry Run/RunOnce entries (HKCU, HKLM, Wow6432Node) + Startup folder shortcuts (user + common) | One checkbox per entry, with its target command shown. Known keeps come annotated and **unchecked** by default |
+| **LOGON TASKS** | Logon/boot-triggered scheduled tasks: root-path tasks, Office logon tasks (re-enabled by every Office update), Edge/Google updater tasks | Disabled tasks show green ✓ APPLIED; running/ready logon tasks show PENDING. System tasks under `\Microsoft\Windows\*` are never listed |
+| **WINDOWS EXTRAS** | The self-starting Windows bloat: Widgets apps + news-feed policy, Copilot, Microsoft AI Manager (`aimgr`), Edge startup boost / background mode, orphaned StartupApproved leftovers | Same checkbox model; each item explains what it removes |
+
+## Keep-list annotations
+
+Known-good entries are recognized and start **unchecked** with a note explaining why:
+
+- **SecurityHealth** (Defender tray) — keep, it's your security status icon.
+- **Hardware control** (FanControl, MSI Afterburner) — keep; they set your fan curves / OC at logon.
+- Everything else defaults to **checked** (recommended remove) — the "most if not all of them" model. You can uncheck anything before Start.
+
+## Guardrails
+
+- **Dry run only in v0.1** — the scan shows current state vs. target; nothing is changed. Reports are written to `logs\`.
+- **Anticheat aware:** kernel anticheat *services* are out of scope here (that's FPSOptimization's domain, with its Manual-never-Disabled rule); only the tray-app Run entry is listed.
+- **StartupApproved gotcha handled:** value names can carry trailing spaces — matching is done on exact registry names, not trimmed ones.
+- **Drift-aware by design:** vendors re-add their entries on every update; because the catalog is enumerated fresh each launch, whatever came back simply shows up again as PENDING.
 
 ## Why a separate tool from FPSOptimization
 

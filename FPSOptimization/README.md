@@ -2,7 +2,7 @@
 
 The gaming-FPS tool of the [PCOptimizationServices](../README.md) suite. Detects your PC's specs, lists **52 FPS-related changes as checkboxes** (all pre-checked), and lets you uncheck anything before pressing Start. Covers telemetry and background-contention elimination, service debloat, NIC power saving, filesystem tuning, and the aggressive security trade-offs (Spectre mitigations, VBS, Defender scheduling).
 
-> **Status: v0.1 — DRY-RUN.** Pressing **Start dry run** reports current state vs target for every checked item and saves a Markdown + JSON report to `logs\` — **nothing is changed in v0.1**. The apply engine (with undo JSON + restore point) is v2.
+> **Status: v0.3 — DRY-RUN.** The tool auto-scans on launch and re-scans on **Start dry run**, reporting current state vs target for every checked item and saving a Markdown + JSON report to `logs\` — **nothing is changed yet**. The apply engine (with undo JSON + restore point) is v2. As of v0.3 the UI lives in the suite's shared framework (`..\shared\PrimeUI.ps1`); this folder holds the catalog and a thin launcher.
 
 ## Run it
 
@@ -10,7 +10,7 @@ The gaming-FPS tool of the [PCOptimizationServices](../README.md) suite. Detects
 .\Start-FPSOptimization.ps1        # self-elevates via UAC
 ```
 
-The window shows:
+Or launch it from the suite hub, `..\PCOptimizers.ps1`. The window shows:
 - **Specs bar** — CPU, GPU, RAM, OS build, disks, active NIC, elevation state
 - **Checklist** — grouped by level and module, every item with its id, description, and target state
 - **Buttons** — Select all / Select none / Uncheck Level 3 / Start dry run / Open last report
@@ -29,13 +29,13 @@ Full catalog with what/why/exact-command/revert for every item: **[CHANGES.md](C
 
 ## Scope boundary
 
-FPSOptimization owns changes that affect **frame rate and frame-time consistency while gaming**. Pure startup-entry cleanup (Run keys, startup folders, logon tasks, autostart drift) belongs to the [StartupOptimization](../StartupOptimization/) tool. The one overlap — Edge autolaunch (item 1.8) — stays here for now because Edge's background presence costs CPU while gaming; it may migrate once StartupOptimization ships.
+FPSOptimization owns changes that affect **frame rate and frame-time consistency while gaming**. Pure startup-entry cleanup (Run keys, startup folders, logon tasks, autostart drift) belongs to the [StartupOptimization](../StartupOptimization/) tool. The one overlap — Edge autolaunch (item 1.8) — stays here because Edge's background presence costs CPU while gaming; StartupOptimization checks the same surface for everyday PCs.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `Start-FPSOptimization.ps1` | WPF GUI: specs detection, checklist, dry-run engine, report writer |
+| `Start-FPSOptimization.ps1` | Thin launcher: dot-sources `..\shared\PrimeUI.ps1` (theme, specs detection, checklist window, dry-run engine) and this tool's catalog, then wires titles/levels |
 | `lib\Catalog.ps1` | The 52 items as data — each with a read-only `Check` scriptblock. This doubles as the audit engine; v2's apply logic plugs into the same items |
 | `CHANGES.md` | Human-readable catalog: what / why / exact implementation / revert per item |
 | `logs\` | Generated dry-run reports (`DryRun_<timestamp>.md` + `.json`), git-ignored |

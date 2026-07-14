@@ -43,41 +43,7 @@ function Get-PowerAcValue {
     if ($line -and $line[0] -match '0x([0-9a-fA-F]+)') { [Convert]::ToInt32($Matches[1], 16) } else { $null }
 }
 
-function Get-ActiveNic {
-    Get-NetAdapter -Physical -ErrorAction SilentlyContinue |
-        Where-Object Status -eq 'Up' |
-        Sort-Object -Property Speed -Descending |
-        Select-Object -First 1
-}
-
-# ---------- PC specs detection ----------
-
-function Get-PCSpecs {
-    $cpu  = Get-CimInstance Win32_Processor | Select-Object -First 1
-    $gpu  = Get-CimInstance Win32_VideoController |
-                Where-Object { $_.Name -notmatch 'Basic Display|Remote' } | Select-Object -First 1
-    $os   = Get-CimInstance Win32_OperatingSystem
-    $cs   = Get-CimInstance Win32_ComputerSystem
-    $dimm = Get-CimInstance Win32_PhysicalMemory
-    $ramGb    = [math]::Round($cs.TotalPhysicalMemory / 1GB)
-    $ramSpeed = ($dimm | Measure-Object -Property ConfiguredClockSpeed -Maximum).Maximum
-    $disks = Get-CimInstance Win32_DiskDrive | ForEach-Object {
-        '{0} ({1} GB)' -f ($_.Model -replace '\s+', ' ').Trim(), [math]::Round($_.Size / 1GB)
-    }
-    $nic   = Get-ActiveNic
-    $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
-              ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    [pscustomobject]@{
-        CPU      = $cpu.Name.Trim()
-        Cores    = '{0}C / {1}T' -f $cpu.NumberOfCores, $cpu.NumberOfLogicalProcessors
-        GPU      = $gpu.Name
-        RAM      = '{0} GB @ {1} MHz' -f $ramGb, $ramSpeed
-        OS       = '{0} (build {1})' -f $os.Caption.Trim(), $os.BuildNumber
-        Disks    = $disks -join ' · '
-        NIC      = if ($nic) { '{0} ({1})' -f $nic.InterfaceDescription, $nic.LinkSpeed } else { 'none up' }
-        Elevated = $admin
-    }
-}
+# NOTE: Get-ActiveNic + Get-PCSpecs live in shared\PrimeUI.ps1 — dot-source it BEFORE this file.
 
 # ---------- catalog ----------
 
@@ -86,7 +52,7 @@ function Add-CatalogItem {
     param($Id, $Level, $Module, $Name, $Desc, $Target, [scriptblock]$Check)
     $Script:OptimizationCatalog.Add([pscustomobject]@{
         Id = $Id; Level = $Level; Module = $Module; Name = $Name
-        Desc = $Desc; Target = $Target; Check = $Check
+        Desc = $Desc; Target = $Target; Check = $Check; DefaultChecked = $true
     })
 }
 
