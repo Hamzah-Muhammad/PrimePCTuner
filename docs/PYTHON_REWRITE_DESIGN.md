@@ -70,6 +70,44 @@ Start-FPSOptimization.ps1 -Headless -Scan -Json -Checked "1.1,1.2,1.T,..."
 - `-Scan`: runs `Invoke-PrimeCatalogScan` for the given ids, prints one JSON
   array to stdout. This is the slow call (today's auto-scan-on-launch).
 
+## 3.5 Elevation flow (Python side)
+
+Mirrors `Invoke-PrimeBootstrap`'s behavior, adapted for a single-elevation-
+at-startup model (no per-tool relaunch, no STA/WPF concerns).
+
+1. On `app.py` start — before the uvicorn thread starts or the pywebview
+   window opens — check `ctypes.windll.shell32.IsUserAnAdmin()`.
+2. If not elevated, relaunch self via `ShellExecuteW(None, "runas", target,
+   params, None, 1)`:
+   - Frozen (PyInstaller onefile): `target = sys.executable` (the exe
+     itself).
+   - Dev mode: `target = sys.executable` (python.exe), `params` includes
+     the script path — same frozen-vs-dev dual resolution as PS's
+     `$PSScriptRoot` fallback (§3), just the Python version of it.
+   - On success: `sys.exit(0)` immediately — the elevated child is now the
+     real app.
+   - On decline/failure (`ShellExecuteW` returns an error handle, e.g. the
+     user clicked "No" on the UAC prompt): **do not exit** — warn and
+     continue unelevated, exactly like PS's try/catch-and-continue. The app
+     still opens; some scan items will read REVIEW/ERROR instead of a clean
+     result, which is already how the PS app behaves today under the same
+     condition.
+3. A `--self-test` flag (Python's equivalent of `-SelfTest`) skips
+   elevation entirely, for CI/verification runs that must not trigger UAC.
+4. **No STA/WPF-equivalent relaunch is needed.** That check in
+   `Invoke-PrimeBootstrap` exists only because WPF requires an STA thread;
+   pywebview has its own threading contract (window creation on the main
+   thread), already satisfied by construction — uvicorn runs in a
+   background thread, `webview.start()` runs on main.
+5. **Key guarantee this whole model leans on:** once `app.py` is running
+   elevated, every `subprocess.run([ps_exe, ...])` child inherits that
+   elevation token automatically — Windows duplicates the parent's token on
+   process creation unless told otherwise. This is exactly why the PS-side
+   headless bootstrap can skip self-elevation (§3), and why today's WPF hub
+   already launches tool scripts elevated without a second UAC prompt per
+   tool. **Subprocess calls must never use `-Verb RunAs` themselves** —
+   that would trigger a fresh UAC prompt on every single scan.
+
 ## 4. Data contracts (already ~90% defined by the existing JSON logs)
 
 ```jsonc
@@ -98,6 +136,70 @@ Pydantic models in `python/backend/models.py` mirror these 1:1.
 - Runs as a single local process — `uvicorn` in a background thread inside
   the same elevated process pywebview opens the window from, bound to
   `127.0.0.1` on a random free port. No network exposure.
+
+## 5.5 Subprocess bridge robustness (`ps_bridge.py` contract)
+
+This is the single highest-risk integration point in the whole rewrite —
+every catalog fetch and every scan tunnels through it — so it gets explicit
+failure-mode handling, not just a happy-path wrapper.
+
+- **PS host resolution**: resolve once at startup (`shutil.which('pwsh')`,
+  fall back to `shutil.which('powershell')`), cache the path. If neither
+  exists, fail app startup with a clear fatal state surfaced to the React
+  UI as a startup-health banner — the current WPF hub shows a `MessageBox`
+  for this same condition; a silently-empty catalog would be worse.
+- **Invocation flags**: always `-NoProfile -NonInteractive -ExecutionPolicy
+  Bypass -File <script> ...`. `-NonInteractive` is defensive — makes PS
+  fail loudly instead of hang if any cmdlet ever tries to prompt.
+  `-ExecutionPolicy Bypass` is scoped to this one invocation only, never
+  touches the system-wide policy — same "don't change anything beyond
+  what's needed" posture as the suite's existing security guardrails.
+- **Encoding — a gotcha this codebase has already been bitten by once**:
+  the suite needed a UTF-8 BOM fix (see the packaging-bugs history) because
+  Windows PowerShell mis-renders its non-ASCII glyphs (`— · → ✓ ◆ ✕`) under
+  the console's default codepage. The same failure mode applies to
+  subprocess stdout capture — `subprocess.run(..., text=True)` decodes with
+  the locale-preferred encoding (often cp1252 on Windows), which will
+  mangle those glyphs in `Desc`/`Target`/`Current` strings. Fix on both
+  ends: PS headless entry points set `[Console]::OutputEncoding =
+  [System.Text.Encoding]::UTF8` before printing JSON; Python passes
+  `encoding='utf-8'` explicitly to `subprocess.run(...)`, never relies on
+  the default.
+- **Timeouts** (two profiles, not one):
+  - `-ListCatalog`: 15s ceiling — metadata-only, should return in low
+    single-digit seconds even for Startup's live enumeration.
+  - `-Scan`: 120s ceiling — 52+ checks, some shelling out per-item to
+    `fsutil`/`powercfg`. `subprocess.run(..., timeout=...)` already kills
+    the child on expiry; on `TimeoutExpired`, return a structured error —
+    never let a hung PS process hang an HTTP request indefinitely (a
+    failure mode that couldn't happen in the old synchronous WPF model).
+- **Exit-code contract**: headless PS entry points exit `0` whenever they
+  produced a JSON payload — including when individual checks errored
+  (those surface as per-item `Status: "ERROR"` inside the JSON; that's
+  normal). Non-zero exit means the *engine* broke (catalog failed to load,
+  unhandled top-level exception) — `ps_bridge.py` treats that as a hard
+  `PSBridgeError` and never tries to salvage partial stdout.
+- **Never paper over an engine failure**: if `returncode == 0` but
+  `json.loads(stdout)` still fails (malformed output), that's also a hard
+  `PSBridgeError` surfaced with `stdout`/`stderr`/`returncode` attached —
+  not silently defaulted to an empty result. This is a PC-optimization tool
+  that will eventually gate real system changes once the apply engine
+  exists; a silently-empty "nothing to do" result would be actively
+  misleading, worse than a visible error.
+- **Concurrency**: one scan in flight per tool at a time — a simple
+  per-tool lock in `ps_bridge.py`, not a global lock (the hub can
+  plausibly show cached state for both tools independently) and not a
+  queueing system (single-user local desktop app — a lock that just
+  rejects/waits is enough).
+- **Execution model**: plain blocking `subprocess.run()` inside a sync
+  FastAPI route handler — FastAPI runs sync `def` routes in a thread pool
+  automatically, so no `asyncio.create_subprocess_exec` is needed. This is
+  a deliberate simplification: the app has exactly one concurrent user, so
+  async subprocess plumbing would be pure ceremony.
+- **Frozen-path resolution**: like PS's `$PSScriptRoot` fallback,
+  `ps_bridge.py` needs a dual-mode resolver for the target `.ps1` path —
+  `Path(__file__).parent` in dev, the PyInstaller-extracted sibling-folder
+  location (§8) when frozen.
 
 ## 6. pywebview frontend — React
 
