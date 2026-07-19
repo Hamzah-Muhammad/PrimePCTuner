@@ -238,7 +238,7 @@ failure-mode handling, not just a happy-path wrapper.
 | Packaging | PyInstaller | 6.21.x | `--onefile`, `--add-data` for the bundled `.ps1` engine folders (§8) |
 | PS→Python bridge | `subprocess` (stdlib) | — | No extra package; just `subprocess.run([pwsh_path, '-File', ..., '-Headless', ...], capture_output=True)` and `json.loads()` the stdout |
 | Python lint/format | `ruff` | latest | One tool for both (`ruff check` + `ruff format`) instead of flake8+black+isort — fewer moving parts |
-| Python types | mypy (basic mode) — **pending your call, §8.7** | latest | Optional; Pydantic already validates the highest-risk surface (PS↔Python JSON shape) at runtime |
+| Python types | **skipped for v1** (§8.7a) | — | Pydantic already validates the highest-risk surface (PS↔Python JSON shape) at runtime; mypy would be redundant on that boundary |
 | JS/TS lint/format | ESLint (typescript-eslint + react-hooks configs, Vite's default scaffold) + Prettier | latest | Standard for a Vite+React+TS project, not extra ceremony |
 | Backend tests | `pytest` + FastAPI `TestClient`, `ps_bridge` mocked | — | Heaviest coverage on `ps_bridge.py` — highest-risk module (§5.5) |
 | Frontend tests | Vitest + React Testing Library, smoke-level only | — | A handful of tests (routing, StatusPill variants), not full coverage — matches the app's actual size |
@@ -587,19 +587,16 @@ incidental diff noise, add a `.gitattributes` once `python/`/`frontend/`
 exist: `*.ps1 text eol=crlf`, `*.py text eol=lf`, `*.ts *.tsx *.css text
 eol=lf`.
 
-### 8.7a Open question: mypy, yes or no?
+### 8.7a mypy — decided: skip for v1 (confirmed 2026-07-19)
 
-Not decided here. The case *for*: catches real type mismatches between
-`ps_bridge.py`'s parsed JSON and the Pydantic models before they become a
-runtime bug. The case *against*: Pydantic already validates that exact
-boundary at runtime, on every request, automatically — a static checker
-would be catching the same class of bug a second, redundant way, and it's
-one more tool + one more CI step for a codebase that's been deliberately
-kept thin at every other turn (no react-router, no state library, no
-codegen, no async subprocess). Recommend skipping it for v1 and revisiting
-if `ps_bridge.py` or `models.py` grow enough that static checking starts
-pulling its weight — but this is genuinely your call, not a default I'm
-picking silently.
+Pydantic already validates the highest-risk boundary (`ps_bridge.py`'s
+parsed JSON vs. the models) at runtime on every request — mypy would catch
+the same class of bug a second, redundant way, for the cost of a new
+dependency, a new CI step, and annotation overhead, on a stack that's been
+kept deliberately thin at every other turn (no react-router, no state
+library, no codegen, no async subprocess). Revisit only if `ps_bridge.py`/
+`models.py` grow enough that static checking starts pulling its own
+weight.
 
 ## 9. Explicitly out of scope for this first cut
 
