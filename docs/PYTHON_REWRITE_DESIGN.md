@@ -99,20 +99,29 @@ Pydantic models in `python/backend/models.py` mirror these 1:1.
   the same elevated process pywebview opens the window from, bound to
   `127.0.0.1` on a random free port. No network exposure.
 
-## 6. pywebview frontend
+## 6. pywebview frontend — React
 
 - **One** pywebview window with client-side routing (hub view ↔ tool view),
   replacing today's "hub launches a separate elevated sibling process per
   tool" model. Simpler process model, no `pwsh.exe`-resolution/portability
   code needed at all (that whole block in `PrimePCTuner.ps1` goes away).
-- Plain HTML/CSS/vanilla JS calling `fetch()` against the local FastAPI
-  server — no build step, no Node toolchain, keeps the PyInstaller
-  single-file story simple.
-- CSS is a mechanical port of `PrimeUI.ps1`'s XAML styles — the palette and
-  every component (`PrimeCheck`, `BtnSec`, `BtnPri`, `RowCard`, `Chip`, the
-  two radial-gradient glows) are already fully specified as hex values and
-  layout rules; translating XAML `Style`/`ControlTemplate` → CSS classes is
-  well-defined work, not a design decision.
+- **React 19 + Vite**, built with Claude Code's `frontend-design` skill —
+  chosen over vanilla JS specifically so that skill (component-level design
+  guidance, not just raw HTML/CSS) is usable for the UI work. Client-side
+  routing via a minimal router (react-router or a hand-rolled 2-view
+  switch — final call at scaffold time, not a design-doc-level decision).
+- **Build step is dev/CI-time only.** `npm run build` emits a static
+  `frontend/dist/` (`index.html` + hashed JS/CSS bundles) that pywebview
+  loads directly and FastAPI can also serve as static files if needed. The
+  shipped exe never runs Node — PyInstaller bundles `dist/`, not the React
+  source or `node_modules`. Runtime dependency surface is unchanged from
+  the original vanilla-JS plan (§8).
+- CSS/theme is still a port of `PrimeUI.ps1`'s XAML styles into React
+  components/CSS — the palette and every component (`PrimeCheck`, `BtnSec`,
+  `BtnPri`, `RowCard`, `Chip`, the two radial-gradient glows) are already
+  fully specified as hex values and layout rules; that translation work is
+  unchanged by the React choice, just now done as components instead of
+  hand-written DOM/`fetch()` calls.
 
 ## 6.5 Tech stack & versions (checked 2026-07-19)
 
@@ -123,7 +132,7 @@ Pydantic models in `python/backend/models.py` mirror these 1:1.
 | ASGI server | uvicorn[standard] | latest | Runs in a background thread inside the same elevated process — not a separate service |
 | Validation | pydantic | ≥2.7 | Ships as a FastAPI dependency; models in `python/backend/models.py` (§4) |
 | Desktop shell | pywebview | 6.2.x | Windows backend = EdgeChromium (WebView2) — the runtime is preinstalled on Win11 (evergreen), so no extra install for the target PCs per [[pc_setup]] |
-| Frontend | Vanilla HTML/CSS/JS | — | No React/Vue, no Node/npm build step — keeps PyInstaller packaging a pure-Python problem (§6) |
+| Frontend | React 19.2.x + Vite 8.x | — | Built with Claude Code's `frontend-design` skill for the UI work; `npm run build` emits static `dist/` files that pywebview points at — Node/npm is a **build-time-only** dependency, not a runtime one (§6) |
 | Packaging | PyInstaller | 6.21.x | `--onefile`, `--add-data` for the bundled `.ps1` engine folders (§8) |
 | PS→Python bridge | `subprocess` (stdlib) | — | No extra package; just `subprocess.run([pwsh_path, '-File', ..., '-Headless', ...], capture_output=True)` and `json.loads()` the stdout |
 | Dev/test | `pytest` for backend unit tests (ps_bridge mocked), `-SelfTest` pattern reused PS-side | — | Mirrors the existing `-SelfTest` convention already used by every `.ps1` entry point |
@@ -149,12 +158,17 @@ C:\Apps\PrimePCTuner\
       ps_bridge.py            — subprocess wrapper: run pwsh headless, parse JSON, timeout/error handling
       reports.py               — write .md/.json reports (ported from Invoke-PrimeScan)
       models.py                 — pydantic: CatalogItem, ScanResult, ToolMeta
-    frontend\
-      index.html
-      css\theme.css           — ported palette/components (§6)
-      js\app.js                — fetch calls, hub + checklist rendering, client router
+    frontend\                 — React + Vite source (dev-time only, not shipped)
+      src\
+        App.tsx                 — client router: hub view ↔ tool view
+        components\             — Chip, RowCard, StatusPill, ChecklistRow, etc. (§6)
+        theme.css                — ported palette from PrimeUI.ps1 (§6)
+        api.ts                    — typed fetch wrappers for the FastAPI routes (§5)
+      package.json
+      vite.config.ts
+      dist\                    — `npm run build` output; PyInstaller bundles THIS, not src\
     requirements.txt
-    build.spec                — PyInstaller spec, bundles the .ps1 engine folders as data
+    build.spec                — PyInstaller spec, bundles frontend\dist\ + the .ps1 engine folders as data
   docs\
     PYTHON_REWRITE_DESIGN.md   (this file)
 ```
@@ -164,13 +178,17 @@ is deleted by this rewrite; Python only adds a new front door.
 
 ## 8. Packaging
 
-- PyInstaller onefile build of `python/app.py`; `FPSOptimization/`,
-  `StartupOptimization/`, `shared/` bundled via `--add-data`, extracted
-  next to the exe at first run (same "ship the sibling folders" lesson
-  already learned from the ps2exe zip release — subprocess needs real
-  `.ps1` files on disk, not PyInstaller's virtual FS).
-- Still only depends on `powershell.exe`/`pwsh.exe` being present, which is
-  true of every Windows install — no new runtime dependency introduced.
+- Build is two stages: (1) `npm run build` in `frontend/` produces
+  `frontend/dist/` — a plain static site, no server, no Node needed to run
+  it; (2) PyInstaller onefile build of `python/app.py` bundles
+  `frontend/dist/`, `FPSOptimization/`, `StartupOptimization/`, `shared/`
+  via `--add-data`, extracted next to the exe at first run (same "ship the
+  sibling folders" lesson already learned from the ps2exe zip release —
+  subprocess needs real `.ps1` files on disk, not PyInstaller's virtual FS).
+- End-user runtime dependencies are unchanged from the original vanilla-JS
+  plan: `powershell.exe`/`pwsh.exe` (every Windows install has one) +
+  WebView2 (preinstalled on Win11). **Node/npm is never required on the
+  target PC** — only on the dev machine building the release.
 
 ## 9. Explicitly out of scope for this first cut
 
