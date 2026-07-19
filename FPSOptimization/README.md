@@ -1,6 +1,6 @@
 # FPSOptimization
 
-The gaming-FPS tool of the [PrimeFPS](../README.md) suite. Detects your PC's specs, lists **52 FPS-related changes as checkboxes** (all pre-checked), and lets you uncheck anything before pressing Start. Covers telemetry and background-contention elimination, service debloat, NIC power saving, filesystem tuning, and the aggressive security trade-offs (Spectre mitigations, VBS, Defender scheduling).
+The gaming-FPS tool of the [PrimePCTuner](../README.md) suite. Detects your PC's specs, lists **52 FPS-related changes as checkboxes** (all pre-checked), and lets you uncheck anything before pressing Start. Covers telemetry and background-contention elimination, service debloat, NIC power saving, filesystem tuning, and the aggressive security trade-offs (Spectre mitigations, VBS, Defender scheduling).
 
 > **Status: v0.3 — DRY-RUN.** The tool auto-scans on launch and re-scans on **Start dry run**, reporting current state vs target for every checked item and saving a Markdown + JSON report to `logs\` — **nothing is changed yet**. The apply engine (with undo JSON + restore point) is v2. As of v0.3 the UI lives in the suite's shared framework (`..\shared\PrimeUI.ps1`); this folder holds the catalog and a thin launcher.
 
@@ -10,7 +10,7 @@ The gaming-FPS tool of the [PrimeFPS](../README.md) suite. Detects your PC's spe
 .\Start-FPSOptimization.ps1        # self-elevates via UAC
 ```
 
-Or launch it from the suite hub, `..\PrimeFPS.ps1`. The window shows:
+Or launch it from the suite hub, `..\PrimePCTuner.ps1`. The window shows:
 - **Specs bar** — CPU, GPU, RAM, OS build, disks, active NIC, elevation state
 - **Checklist** — grouped by level and module, every item with its id, description, and target state
 - **Buttons** — Select all / Select none / Uncheck Level 3 / Start dry run / Open last report

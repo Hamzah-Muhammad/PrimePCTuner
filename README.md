@@ -1,14 +1,14 @@
-# PrimeFPS
+# PrimePCTuner
 
 A suite of PowerShell optimization tools for Windows 11 PCs. Each tool is its own app in its own folder, but they all share the same DNA: **audit first, checkbox consent for every single change, undo logging, and hard guardrails** — derived from a real, verified optimization pass on a Ryzen 7 5800X3D + RTX 4070 Ti rig that took Warzone from ~100 to ~200 FPS.
 
 ## Start here: the hub
 
 ```powershell
-.\PrimeFPS.ps1
+.\PrimePCTuner.ps1
 ```
 
-**PrimeFPS** is the suite's main page: it detects and displays your PC's specs, then lets you launch whichever tool fits the machine. Every tool opens as the same branded checklist — auto-scanned against your system, green ✓ APPLIED for what's already done, a checkbox per change.
+**PrimePCTuner** is the suite's main page: it detects and displays your PC's specs, then lets you launch whichever tool fits the machine. Every tool opens as the same branded checklist — auto-scanned against your system, green ✓ APPLIED for what's already done, a checkbox per change.
 
 ## The tools
 
@@ -31,9 +31,9 @@ More tools may join the suite (candidates: NetworkOptimization for latency tunin
 ## Repo layout
 
 ```
-PrimeFPS/
+PrimePCTuner/
 ├── README.md                  ← you are here
-├── PrimeFPS.ps1                ← the hub: specs + pick a tool
+├── PrimePCTuner.ps1            ← the hub: specs + pick a tool
 ├── shared/
 │   └── PrimeUI.ps1            ← shared WPF framework: theme, spec detection,
 │                                 checklist window builder, dry-run scan engine

@@ -1,10 +1,10 @@
-﻿# PrimeFPS.ps1 — the suite hub (PrimeFPS)
+﻿# PrimePCTuner.ps1 — the suite hub (PrimePCTuner)
 # Main page: your PC's specs + which tool do you want to run?
 #   · FPS Optimizer     — deep gaming optimization (52 checks, 3 risk levels)
 #   · Startup Optimizer — clean logon/startup junk on everyday PCs
 #
-# Usage:  .\PrimeFPS.ps1            (self-elevates; tools launch elevated from here)
-#         .\PrimeFPS.ps1 -SelfTest  (build UI headless + exit)
+# Usage:  .\PrimePCTuner.ps1            (self-elevates; tools launch elevated from here)
+#         .\PrimePCTuner.ps1 -SelfTest  (build UI headless + exit)
 
 param([switch]$SelfTest)
 $ErrorActionPreference = 'Stop'
@@ -34,7 +34,7 @@ $Tools = @(
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="PrimeFPS by @Humzeeny"
+        Title="PrimePCTuner by @Humzeeny"
         Width="880" Height="640" MinWidth="760" MinHeight="560"
         WindowStartupLocation="CenterScreen" Background="$($P.Bg)"
         FontFamily="Segoe UI" TextOptions.TextFormattingMode="Display">
@@ -57,10 +57,10 @@ $(Get-PrimeTopbarXaml)
       </Grid>
 
       <StackPanel Grid.Row="1" Margin="0,22,0,12">
-        <TextBlock Text="P R I M E F P S" FontSize="11"
+        <TextBlock Text="P R I M E P C T U N E R" FontSize="11"
                    FontWeight="Bold" Foreground="$($P.Green)"/>
         <TextBlock Margin="0,4,0,0" FontSize="34" FontWeight="ExtraBold" Foreground="$($P.Text)">
-          <Run Text="Prime"/><Run Foreground="$($P.Green)" Text="FPS"/>
+          <Run Text="Prime"/><Run Foreground="$($P.Green)" Text="PCTuner"/>
         </TextBlock>
         <TextBlock Margin="0,4,0,0" FontSize="13" Foreground="$($P.Muted)" TextWrapping="Wrap"
                    Text="Your system, detected below. Pick the tool that fits this PC — every tool shows you each change as a checkbox before anything happens."/>
@@ -75,7 +75,7 @@ $(Get-PrimeTopbarXaml)
           <Run Foreground="$($P.Green)" Text="@"/><Run Text="Humzeeny"/>
         </TextBlock>
         <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right" FontSize="11.5"
-                   Foreground="$($P.Muted)" Text="PrimeFPS hub v0.1"/>
+                   Foreground="$($P.Muted)" Text="PrimePCTuner hub v0.1"/>
       </DockPanel>
     </Grid>
   </Grid>
@@ -98,7 +98,7 @@ foreach ($cand in 'pwsh.exe', 'powershell.exe') {
     if ($cmd) { $PSExe = $cmd.Source; break }
 }
 if (-not $PSExe) {
-    [Windows.MessageBox]::Show('No PowerShell host (pwsh or powershell.exe) found on this PC — cannot launch tools.', 'PrimeFPS', 'OK', 'Error') | Out-Null
+    [Windows.MessageBox]::Show('No PowerShell host (pwsh or powershell.exe) found on this PC — cannot launch tools.', 'PrimePCTuner', 'OK', 'Error') | Out-Null
 }
 
 foreach ($tool in $Tools) {

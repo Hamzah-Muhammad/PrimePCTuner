@@ -1,4 +1,4 @@
-﻿# PrimeUI.ps1 — shared UI framework for the PrimeFPS suite.
+﻿# PrimeUI.ps1 — shared UI framework for the PrimePCTuner suite.
 # Palette, window bootstrap (elevation/STA/WPF), PC-specs detection, spec chips,
 # and the branded checklist window + dry-run scan engine used by every tool.
 # Dot-source this BEFORE a tool's lib\Catalog.ps1.

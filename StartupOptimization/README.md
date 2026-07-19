@@ -1,6 +1,6 @@
 # StartupOptimization
 
-**Status: v0.1 — dry-run GUI.** The startup-junk tool of the [PrimeFPS](../README.md) suite, aimed at **everyday PCs, not gaming rigs** — the toned-down cleaner. Same pattern as FPSOptimization: detect, list every removal as a checkbox, auto-scan on launch, dry-run first.
+**Status: v0.1 — dry-run GUI.** The startup-junk tool of the [PrimePCTuner](../README.md) suite, aimed at **everyday PCs, not gaming rigs** — the toned-down cleaner. Same pattern as FPSOptimization: detect, list every removal as a checkbox, auto-scan on launch, dry-run first.
 
 ```powershell
 .\Start-StartupOptimization.ps1            # self-elevates, opens the GUI

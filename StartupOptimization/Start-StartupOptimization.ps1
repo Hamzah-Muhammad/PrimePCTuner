@@ -1,4 +1,4 @@
-﻿# Start-StartupOptimization.ps1 — Startup Optimizer (PrimeFPS suite)
+﻿# Start-StartupOptimization.ps1 — Startup Optimizer (PrimePCTuner suite)
 # For everyday PCs, not gaming rigs: lists every startup app / logon task /
 # Windows extra on THIS PC as a checkbox. DRY RUN — auto-scans on launch,
 # green APPLIED / gold PENDING per item, nothing is changed.
@@ -15,7 +15,7 @@ Invoke-PrimeBootstrap -SelfTest:$SelfTest -ScriptPath $PSCommandPath
 
 $ctx = New-PrimeChecklistApp `
     -Title       'Startup Optimizer' `
-    -Eyebrow     'P R I M E F P S   ·   F O R  E V E R Y D A Y  P C s' `
+    -Eyebrow     'P R I M E P C T U N E R   ·   F O R  E V E R Y D A Y  P C s' `
     -HeadingPlain 'Startup ' -HeadingAccent 'Optimizer' `
     -SubTitle    'Every app, task, and Windows extra that launches itself at logon on this PC. Green means already clean. Unchecked rows are recommended keeps. Nothing is changed in dry-run mode.' `
     -FooterNote  'Startup Optimizer v0.1 · dry run — no changes applied' `
