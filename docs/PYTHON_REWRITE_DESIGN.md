@@ -218,6 +218,9 @@ Pydantic models in `python/backend/models.py` mirror these 1:1.
 - `POST /api/{tool}/apply {checked: [ids]}` and `POST /api/{tool}/undo` —
   same per-item individual invocation, but **sequential**, not pooled (§5.5,
   §8.5).
+- `POST /api/scan-pc` and `GET /api/scan-pc` — the hub-level system
+  inventory (§6.7), separate from either tool's catalog — one subprocess
+  call, in-memory session cache in `app.state`, not persisted.
 - Runs as a single local process — `uvicorn` in a background thread inside
   the same elevated process pywebview opens the window from, bound to
   `127.0.0.1` on a random free port. No network exposure.
@@ -412,7 +415,9 @@ src/
     PageHeading.tsx                — eyebrow/heading/subtitle block, reused by Hub + Tool
     SpecsPanel.tsx                   — WrapPanel of <Chip> from PCSpecs, reused by Hub + Tool
   views/
-    HubView.tsx                 — PageHeading + SpecsPanel + ToolCard × 2
+    HubView.tsx                 — PageHeading + SpecsPanel + ScanPcButton + SystemInventoryPanel + ToolCard × 2 (§6.7)
+      ScanPcButton.tsx             — idle/loading/populated states, triggers POST /api/scan-pc
+      SystemInventoryPanel.tsx      — collapsed until scanned, then shows installed software/processes summary
       ToolCard.tsx                — Name+Tag+Desc+Meta+Launch Button (onClick → setView)
     ToolView.tsx                — PageHeading + SpecsPanel + StatsPanel + ChecklistPanel + ToolbarBar
       StatsPanel.tsx               — WrapPanel of scan-count Chips (applied/pending/review/skipped/errors)
@@ -439,6 +444,9 @@ export type CatalogItem = { Id: string; Level: number; Module: string;
 export type ScanResult = { Id: string; Name: string;
   Status: 'APPLIED' | 'PENDING' | 'REVIEW' | 'SKIPPED' | 'ERROR';
   Current: string; Target: string }
+export type SystemInventory = { ScannedAt: string;
+  InstalledSoftware: { Name: string; Version: string }[];
+  RunningProcesses: { Name: string; Pid: number }[] }
 ```
 
 **State management: none beyond `useState`/`useEffect`.** `PCSpecs`/
@@ -462,6 +470,84 @@ contract), or a polling `GET /scan/progress` background-task endpoint for
 an "N of M" progress bar (middle ground, smaller bridge change). Neither is
 in scope now.
 
+## 6.7 "Scan PC" — system inventory (user-directed, confirmed 2026-07-19)
+
+A new hub-level feature, decided via 3 clarifying questions since "gets all
+information" and "script fills" were genuinely ambiguous against the
+architecture already locked in §3/§5.5/§8.5:
+
+1. **Scope**: broad PC inventory, not a full run of every check. On top of
+   the specs chips already fetched at startup (§5's `GET /api/tools`), the
+   "Scan PC" button gathers **installed software** (name+version, read from
+   the registry `Uninstall` keys — `HKLM`/`HKLM\...\Wow6432Node`/`HKCU`,
+   **not** `Get-CimInstance Win32_Product`, which is known to trigger MSI
+   self-repairs and is slow enough to be a real anti-pattern here) and
+   **running processes** (`Get-Process`). Extensible later, not meant to be
+   exhaustive on day one.
+2. **Downstream use**: both — populates a new hub UI panel immediately, and
+   is available to be passed into individual script invocations as
+   optional pre-fetched context (see the constraint below).
+3. **Persistence**: session-only, in-memory. No disk cache — cleared on
+   app close. Simplest, and avoids ever acting on installed-software/
+   process data that's gone stale since a previous session.
+
+### PS side
+One new script, `shared\Invoke-SystemScan.ps1 -Json` — a single
+subprocess call (not per-item; this is one coherent broad read, not
+individually-invoked "changes" the way §3's catalog items are). Reuses
+`Get-PCSpecs` for the hardware fields already established, adds the
+installed-software and running-process enumeration.
+
+### Python side
+- `POST /api/scan-pc` — invokes `Invoke-SystemScan.ps1 -Json`, stores the
+  result in `app.state.system_scan` (plain in-memory attribute on the
+  FastAPI app instance — no cache library, no persistence layer, matching
+  every other "keep it thin" call in this doc), returns it.
+- `GET /api/scan-pc` — returns the current cached scan, or `null`/404 if
+  the button hasn't been clicked yet this session. Lets `HubView` restore
+  its populated state if the user navigates to a tool and back, without
+  re-scanning.
+
+### React side
+`ScanPcButton` (idle → loading → populated) and `SystemInventoryPanel`
+(collapsed/empty until scanned, then a summary — e.g. "142 installed
+programs · 87 running processes" — expandable to the full lists), both new
+on `HubView` per the tree above. Not auto-triggered on app launch —
+user-initiated by design, matching the "button" framing of the request.
+
+### The one hard constraint on "feeds the scripts": never for the
+### game-detection safety check
+§8.5's `Test-GameRunningTracked` pre-flight (refuses an entire apply run if
+a game process is detected) **must always query live at apply time**, never
+accept the cached process list from a "Scan PC" run that could be minutes
+or hours stale — a user could launch a game between scanning and clicking
+Apply, and a stale "no game running" read there would be actively unsafe,
+not just imprecise. This is the one place "feeds the scripts" is
+deliberately **not** wired up, and it's called out explicitly so it isn't
+quietly done wrong during implementation.
+
+Where pre-fetched data *is* a reasonable win: Startup Optimizer's
+`Get-StartupAnnotation` pattern-matching (today just string-matches Run-key
+value names like "Discord"/"Steam") could cross-reference the installed-
+software list for a more grounded annotation instead of a bare name guess
+— a genuine, safe use of the cached data, not a safety-relevant one.
+
+**Scripts must still work standalone without pre-fetched data.** Any
+script that accepts optional pre-gathered context (e.g. the installed-
+software list) falls back to querying it itself if the parameter isn't
+supplied — pre-fetched data is always an optional override, never a hard
+dependency. This preserves §3's whole point: each script stays
+independently invokable and testable (§8.7's Pester suite runs scripts
+directly, with no "Scan PC" step involved) — making a script *require*
+externally-supplied context would undermine the isolation the per-script
+split was built for.
+
+### Scope boundary: Python/React only, not retrofitted into the legacy WPF app
+Per §0 #3 the WPF app is kept indefinitely but is the not-actively-
+developed track (§8.8's `CHANGELOG.md` framing) — "Scan PC" is a new v2.0.0
+feature, not backported to `PrimePCTuner.ps1`. Noting this as a deliberate
+scope call, not an oversight.
+
 ## 7. Proposed folder structure
 
 ```
@@ -482,6 +568,7 @@ C:\Apps\PrimePCTuner\
   shared\PrimeChecks.ps1                 (NEW — shared I/O primitives: Test-RegValue, Set-RegValueTracked,
                                            Test-ServiceStartMode, etc., dot-sourced by every change script)
   shared\PrimeHeadless.ps1               (NEW — mode-dispatch/JSON-output plumbing, no WPF/elevation, §3)
+  shared\Invoke-SystemScan.ps1           (NEW — the "Scan PC" broad inventory, one call, §6.7)
   FPSOptimization\Start-FPSOptimization.ps1        (+ -Headless flag, thin dispatcher to changes\*.ps1, §3)
   StartupOptimization\Start-StartupOptimization.ps1 (+ -Headless flag, thin dispatcher to changes\*.ps1, §3)
   python\
@@ -490,13 +577,14 @@ C:\Apps\PrimePCTuner\
       main.py                — FastAPI app + routes
       ps_bridge.py            — subprocess wrapper: run pwsh headless, parse JSON, timeout/error handling
       reports.py               — write .md/.json reports (ported from Invoke-PrimeScan)
-      models.py                 — pydantic: CatalogItem, ScanResult, ToolMeta
+      models.py                 — pydantic: CatalogItem, ScanResult, ToolMeta, SystemInventory (§6.7)
     frontend\                 — React + Vite source (dev-time only, not shipped)
       src\                      — full component tree in §6.6
         App.tsx                   — owns `view` state (hand-rolled router, §6.6)
         primitives\                — Chip, Button, Checkbox, Card, StatusPill
         layout\                      — BackgroundGlows, Topbar, Footer, PageHeading, SpecsPanel
-        views\                          — HubView(+ToolCard), ToolView(+StatsPanel/ChecklistPanel/ToolbarBar)
+        views\                          — HubView(+ScanPcButton+SystemInventoryPanel+ToolCard, §6.7),
+                                           ToolView(+StatsPanel/ChecklistPanel/ToolbarBar)
         api.ts                            — typed fetch wrappers + shared TS types (§6.6, mirrors §4)
         theme.css                          — ported palette from PrimeUI.ps1 (§6)
       package.json
