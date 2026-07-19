@@ -79,51 +79,84 @@ split:
      (which path, which value, which target) — that's the part actually
      worth auditing per-change.
 
-### FPS Optimizer — static catalog, splits 1:1
+### Storage: by sector, not by tool (user-directed, confirmed 2026-07-19)
 
-52 known-in-advance checks → 52 files, `FPSOptimization\changes\
-<Id>_<Slug>.ps1` (e.g. `1.1_Telemetry-Minimum.ps1`). Each one:
-- Dot-sources `shared\PrimeChecks.ps1` (the I/O primitives) and
+Reading the full existing catalogs revealed that Startup Optimizer's items
+aren't uniformly dynamic: **Run keys, startup-folder shortcuts, and logon
+scheduled tasks are genuinely PC-specific** (discovered live, vary per
+machine), but its "Windows Extras" (`W.1`-`W.5`) and "Leftover Toggles"
+(`X.1`) modules are **static, known-ahead-of-time checks** — several of
+them (Remove Copilot, Remove aimgr, Remove Widgets, Edge boost/background
+off) are near-duplicates of items already in FPS's own catalog. That
+changes the split: individual scripts are stored **by topic/sector**, not
+nested under whichever "tool" folder they historically lived in, and
+genuine duplicates across the two old catalogs get merged into one
+canonical script. Four sectors (confirmed):
+
+- **Windows Changes** — registry/policy tweaks + bloat-app removal.
+- **PC Startup** — the genuinely dynamic startup surface.
+- **Services** — service start-mode changes (big enough alone: 19 items).
+- **Performance & Hardware** — filesystem/NIC/power tuning.
+
+Physical layout: `changes\<Sector>\<Id>_<Slug>.ps1` at the repo root, not
+nested under `FPSOptimization\`/`StartupOptimization\` — those folders
+keep their tool-level content (entry-point script, `logs\`, `README.md`,
+`CHANGES.md`) but no longer own the check scripts directly. A tool's
+"catalog" is now a *view* over sector folders, defined by its
+`manifest.json` (§0 #5, updated): each entry's `Script` field is a
+sector-relative path (e.g. `Services\DiagTrack.ps1`), so which sector a
+file physically lives in is fully decoupled from which tool's checklist it
+appears under in the UI — including the same script appearing in *both*
+tools' manifests where a genuine duplicate was merged.
+
+### Windows Changes — static, splits 1:1 (with cross-catalog dedup)
+
+FPS's Telemetry & Privacy (7), Bloat Scheduled Tasks (1), Edge Containment
+(3), Apps (4), Security Trade-offs (5) = 20 items, plus Startup's Windows
+Extras/Leftover Toggles (6) — minus the ~5 that duplicate an FPS item
+(Copilot removal, aimgr removal, Widgets package removal, Widgets policy,
+Edge boost/background) — merged to one script each, referenced from both
+tools' manifests. Each script:
+- Dot-sources `shared\PrimeChecks.ps1` (I/O primitives) and
   `shared\PrimeHeadless.ps1` (mode-dispatch/JSON-output plumbing, no
-  WPF/elevation — same headless bootstrap concept as before).
+  WPF/elevation).
 - Implements exactly one item's `-Check -Json`, `-Apply -Json`, and
   `-Undo -Json -PreviousValueJson <json>` modes.
 - ~15–30 lines: dot-source, call the shared primitive with this item's
   specific path/name/value, switch on mode, print JSON.
-- Item **metadata** (`Id/Level/Module/Name/Desc/Target/DefaultChecked`)
-  moves out of the scripts entirely, into `FPSOptimization\changes\
-  manifest.json` — a single static file Python reads **directly, with no
-  subprocess call at all**, so listing the catalog for the checklist UI
-  stays instant (no reason to spawn 52 processes just to render
-  checkboxes). The manifest also carries each item's `Script` filename, so
-  Python knows exactly which file to invoke for a given `Id`.
 
-### Startup Optimizer — dynamic catalog, splits by action type, not by instance
+### Services, Performance & Hardware — same static 1:1 split
 
-Startup's items aren't known ahead of time — which Run-key entries or
-scheduled tasks exist depends on what's actually installed on *this* PC,
-discovered live at scan time. There's no fixed list of items to pre-split
-into static files the way FPS has. The same isolation principle applies at
-the only granularity a dynamic catalog actually allows: **one script per
-action type**, parameterized per discovered instance, not one script per
-instance:
-- `StartupOptimization\changes\Enumerate.ps1 -Json` — the discovery step
-  (replaces today's dynamic-catalog-build logic in `Catalog.ps1`). Lists
-  everything currently on this PC across the 4 categories below, with
-  enough identifying detail (registry path+name, file path, task
-  path+name) for Python to know what to pass to the action scripts. Plays
-  the same "fast, single-call listing" role FPS's `manifest.json` plays —
-  except it has to actually run (it's PC-specific), so it's one subprocess
-  call, not a static read.
-- `StartupOptimization\changes\RunKeyEntry.ps1 -RegPath ... -ValueName ...
+19 files under `changes\Services\` (2S.1-2S.19), 13 under `changes\
+Performance & Hardware\` (1.11-1.13, 1.14-1.15, 1.16-1.19, 2B.1-2B.4) —
+same shape as Windows Changes' scripts, one file per item.
+
+### PC Startup — dynamic, splits by action type, not by instance
+
+The only sector where items genuinely aren't known ahead of time — which
+Run-key entries or scheduled tasks exist depends on what's actually
+installed on *this* PC, discovered live at scan time. The same isolation
+principle applies at the only granularity a dynamic catalog allows: **one
+script per action type**, parameterized per discovered instance:
+- `changes\PC Startup\Enumerate.ps1 -Json` — the discovery step (replaces
+  today's dynamic-catalog-build logic). Lists everything currently on this
+  PC across the 3 dynamic categories below, with enough identifying detail
+  (registry path+name, file path, task path+name) for Python to know what
+  to pass to the action scripts. Plays the same "fast, single-call
+  listing" role the static sectors' `manifest.json` files play — except it
+  has to actually run (it's PC-specific), so it's one subprocess call, not
+  a static read.
+- `changes\PC Startup\RunKeyEntry.ps1 -RegPath ... -ValueName ...
   -Check|-Apply|-Undo -Json`
-- `StartupOptimization\changes\StartupFolderShortcut.ps1 -FilePath ...
+- `changes\PC Startup\StartupFolderShortcut.ps1 -FilePath ...
   -Check|-Apply|-Undo -Json` (Apply backs up the file before deleting it,
   per §8.5 — unchanged by this split)
-- `StartupOptimization\changes\ScheduledTask.ps1 -TaskPath ... -TaskName
-  ... -Check|-Apply|-Undo -Json`
-- `StartupOptimization\changes\WindowsExtra.ps1 -RegPath ... -ValueName
-  ... -Check|-Apply|-Undo -Json`
+- `changes\PC Startup\ScheduledTask.ps1 -TaskPath ... -TaskName ...
+  -Check|-Apply|-Undo -Json`
+
+(The old `WindowsExtra.ps1` from the previous draft of this section is
+gone — those items turned out to be static, so they moved into Windows
+Changes above instead of staying a 4th parameterized action script here.)
 
 ### Consequence for the existing WPF app (still kept indefinitely, §0 #3)
 
@@ -146,9 +179,10 @@ Start-FPSOptimization.ps1 -Headless -Check -Json -Id "1.1"
 Start-FPSOptimization.ps1 -Headless -Apply -Json -Id "1.1"
 Start-FPSOptimization.ps1 -Headless -Undo  -Json -Id "1.1" -PreviousValueJson '...'
 ```
-(In practice Python's `ps_bridge.py` can invoke `changes\<Id>_<Slug>.ps1`
-directly using the manifest's `Script` field — the entry-point wrapper
-above is a convenience/stable-CLI-surface layer, not a required hop.)
+(In practice Python's `ps_bridge.py` can invoke the manifest's `Script`
+path (`changes\<Sector>\<Id>_<Slug>.ps1`) directly — the entry-point
+wrapper above is a convenience/stable-CLI-surface layer, not a required
+hop.)
 
 ## 3.5 Elevation flow (Python side)
 
@@ -487,22 +521,35 @@ architecture already locked in §3/§5.5/§8.5:
 2. **Downstream use**: both — populates a new hub UI panel immediately, and
    is available to be passed into individual script invocations as
    optional pre-fetched context (see the constraint below).
-3. **Persistence**: session-only, in-memory. No disk cache — cleared on
-   app close. Simplest, and avoids ever acting on installed-software/
-   process data that's gone stale since a previous session.
+3. **Persistence**: session-scoped, not cross-session — refined below into
+   a concrete mechanism once it became clear individual scripts need to
+   *read* this data, not just the Python API layer.
 
-### PS side
-One new script, `shared\Invoke-SystemScan.ps1 -Json` — a single
-subprocess call (not per-item; this is one coherent broad read, not
+### PS side — the "PC Scan file" (refined 2026-07-19)
+One new script, `shared\Invoke-SystemScan.ps1 -Json` — a single subprocess
+call (not per-item; this is one coherent broad read, not
 individually-invoked "changes" the way §3's catalog items are). Reuses
 `Get-PCSpecs` for the hardware fields already established, adds the
-installed-software and running-process enumeration.
+installed-software and running-process enumeration. **Writes its result to
+a well-known file, `shared\cache\SystemScan.json`, in addition to printing
+it to stdout** — this file *is* "the PC Scan file" individual change
+scripts read from for supplementary context (§3's Windows Changes/Services/
+etc. scripts, via a new `Get-CachedSystemScan` helper in
+`shared\PrimeChecks.ps1` that reads the file and returns `$null` if it's
+missing). A file is simpler for standalone-invoked scripts to consult than
+threading a JSON blob through CLI parameters on every subprocess call —
+and it's what makes the "optional pre-fetched context" mechanism below
+concrete rather than hand-wavy. The file is overwritten fresh on every
+"Scan PC" click and isn't trusted across app restarts (the Python app
+clears/ignores it on startup) — session-scoped in spirit, file-backed in
+mechanism.
 
 ### Python side
-- `POST /api/scan-pc` — invokes `Invoke-SystemScan.ps1 -Json`, stores the
-  result in `app.state.system_scan` (plain in-memory attribute on the
-  FastAPI app instance — no cache library, no persistence layer, matching
-  every other "keep it thin" call in this doc), returns it.
+- `POST /api/scan-pc` — invokes `Invoke-SystemScan.ps1 -Json`, which
+  writes `shared\cache\SystemScan.json` and returns the same JSON via
+  stdout; the backend caches that response in `app.state.system_scan`
+  (plain in-memory attribute — no cache library) purely so `GET
+  /api/scan-pc` can serve it back to the UI without re-reading the file.
 - `GET /api/scan-pc` — returns the current cached scan, or `null`/404 if
   the button hasn't been clicked yet this session. Lets `HubView` restore
   its populated state if the user navigates to a tool and back, without
@@ -533,14 +580,16 @@ software list for a more grounded annotation instead of a bare name guess
 — a genuine, safe use of the cached data, not a safety-relevant one.
 
 **Scripts must still work standalone without pre-fetched data.** Any
-script that accepts optional pre-gathered context (e.g. the installed-
-software list) falls back to querying it itself if the parameter isn't
-supplied — pre-fetched data is always an optional override, never a hard
+script that wants supplementary context calls `Get-CachedSystemScan` (§3),
+which returns `$null` if `shared\cache\SystemScan.json` doesn't exist —
+the script then falls back to querying that one piece of information
+itself. Pre-fetched data is always an optional read, never a hard
 dependency. This preserves §3's whole point: each script stays
 independently invokable and testable (§8.7's Pester suite runs scripts
-directly, with no "Scan PC" step involved) — making a script *require*
-externally-supplied context would undermine the isolation the per-script
-split was built for.
+directly, with no "Scan PC" step involved, so the file simply won't exist
+in that context and every script must tolerate that) — making a script
+*require* the file would undermine the isolation the per-script split was
+built for.
 
 ### Scope boundary: Python/React only, not retrofitted into the legacy WPF app
 Per §0 #3 the WPF app is kept indefinitely but is the not-actively-
@@ -552,25 +601,33 @@ scope call, not an oversight.
 
 ```
 C:\Apps\PrimePCTuner\
-  FPSOptimization\changes\               (NEW — replaces lib\Catalog.ps1, one file per item, §3)
-    manifest.json                          — static metadata for all 52 items, read directly by Python
-    1.1_Telemetry-Minimum.ps1               — one item's Check/Apply/Undo, ~15-30 lines
-    1.2_StartMenuAds-Off.ps1
-    ... (52 total)
-  StartupOptimization\changes\           (NEW — replaces lib\Catalog.ps1, one file per ACTION TYPE, §3)
-    Enumerate.ps1                           — discovery step, PC-specific, one subprocess call
-    RunKeyEntry.ps1                          — Check/Apply/Undo, parameterized per discovered entry
-    StartupFolderShortcut.ps1
-    ScheduledTask.ps1
-    WindowsExtra.ps1
+  changes\                                (NEW — sector-organized, replaces both tools' lib\Catalog.ps1, §3)
+    Windows Changes\                        — ~21 unique files (deduped across old FPS/Startup catalogs)
+      1.1_Telemetry-Minimum.ps1               — one item's Check/Apply/Undo, ~15-30 lines
+      1.2_StartMenuAds-Off.ps1
+      ... (Telemetry & Privacy, Bloat Tasks, Edge Containment, Apps, Security Trade-offs,
+           + Startup's non-duplicate Windows Extras/Leftover Toggles)
+    Services\                               — 19 files (2S.1-2S.19)
+      DiagTrack.ps1
+      ...
+    Performance & Hardware\                 — 13 files (Filesystem, Network Adapter, Power & Input)
+      ...
+    PC Startup\                             — dynamic, action-type scripts, not per-instance
+      Enumerate.ps1                            — discovery step, PC-specific, one subprocess call
+      RunKeyEntry.ps1                           — Check/Apply/Undo, parameterized per discovered entry
+      StartupFolderShortcut.ps1
+      ScheduledTask.ps1
+  FPSOptimization\manifest.json           (NEW — Id/Level/Module/.../Script(sector-relative path) for its items)
+  StartupOptimization\manifest.json       (NEW — same, for its static items; dynamic ones come from Enumerate.ps1)
   shared\PrimeUI.ps1                     (WPF app kept working, but its scan loop now shells out
-                                           to changes\*.ps1 per item instead of running in-process, §3)
+                                           to changes\<Sector>\*.ps1 per item instead of running in-process, §3)
   shared\PrimeChecks.ps1                 (NEW — shared I/O primitives: Test-RegValue, Set-RegValueTracked,
-                                           Test-ServiceStartMode, etc., dot-sourced by every change script)
+                                           Test-ServiceStartMode, Get-CachedSystemScan, etc., dot-sourced by every change script)
   shared\PrimeHeadless.ps1               (NEW — mode-dispatch/JSON-output plumbing, no WPF/elevation, §3)
-  shared\Invoke-SystemScan.ps1           (NEW — the "Scan PC" broad inventory, one call, §6.7)
-  FPSOptimization\Start-FPSOptimization.ps1        (+ -Headless flag, thin dispatcher to changes\*.ps1, §3)
-  StartupOptimization\Start-StartupOptimization.ps1 (+ -Headless flag, thin dispatcher to changes\*.ps1, §3)
+  shared\Invoke-SystemScan.ps1           (NEW — the "Scan PC" broad inventory, writes shared\cache\SystemScan.json, §6.7)
+  shared\cache\SystemScan.json           (generated at runtime by Invoke-SystemScan.ps1 — "the PC Scan file," §6.7, not committed)
+  FPSOptimization\Start-FPSOptimization.ps1        (+ -Headless flag, thin dispatcher into changes\<Sector>\*.ps1, §3)
+  StartupOptimization\Start-StartupOptimization.ps1 (+ -Headless flag, thin dispatcher into changes\<Sector>\*.ps1, §3)
   python\
     app.py                  — entry: elevation check, start uvicorn thread, open pywebview window
     backend\
