@@ -114,6 +114,24 @@ Pydantic models in `python/backend/models.py` mirror these 1:1.
   layout rules; translating XAML `Style`/`ControlTemplate` → CSS classes is
   well-defined work, not a design decision.
 
+## 6.5 Tech stack & versions (checked 2026-07-19)
+
+| Layer | Choice | Version | Why |
+|---|---|---|---|
+| Language | Python | 3.12 or 3.13 | Current safe default for new projects; PyInstaller 6.x supports 3.8–3.15 |
+| Web framework | FastAPI | 0.136.x | Pydantic v2 native (5–50x faster validation than v1), current stable |
+| ASGI server | uvicorn[standard] | latest | Runs in a background thread inside the same elevated process — not a separate service |
+| Validation | pydantic | ≥2.7 | Ships as a FastAPI dependency; models in `python/backend/models.py` (§4) |
+| Desktop shell | pywebview | 6.2.x | Windows backend = EdgeChromium (WebView2) — the runtime is preinstalled on Win11 (evergreen), so no extra install for the target PCs per [[pc_setup]] |
+| Frontend | Vanilla HTML/CSS/JS | — | No React/Vue, no Node/npm build step — keeps PyInstaller packaging a pure-Python problem (§6) |
+| Packaging | PyInstaller | 6.21.x | `--onefile`, `--add-data` for the bundled `.ps1` engine folders (§8) |
+| PS→Python bridge | `subprocess` (stdlib) | — | No extra package; just `subprocess.run([pwsh_path, '-File', ..., '-Headless', ...], capture_output=True)` and `json.loads()` the stdout |
+| Dev/test | `pytest` for backend unit tests (ps_bridge mocked), `-SelfTest` pattern reused PS-side | — | Mirrors the existing `-SelfTest` convention already used by every `.ps1` entry point |
+
+No database, no auth, no external network calls — the whole app talks to
+itself on `127.0.0.1` and to `pwsh.exe`/`powershell.exe` as a subprocess.
+`requirements.txt` will pin exact versions once `python/` is scaffolded.
+
 ## 7. Proposed folder structure
 
 ```
