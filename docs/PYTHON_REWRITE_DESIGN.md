@@ -598,6 +598,92 @@ library, no codegen, no async subprocess). Revisit only if `ps_bridge.py`/
 `models.py` grow enough that static checking starts pulling its own
 weight.
 
+## 8.8 Versioning & release process
+
+### Version scheme — decided: continue the lineage, v2.0.0 (confirmed 2026-07-19)
+The PS suite already shipped v1.0.0. The Python rewrite is versioned as
+**v2.0.0**, not a reset to v1.0.0 — same product, one coherent release
+history on the GitHub Releases page, even though the old PS app (§0
+decision #3) keeps working standalone indefinitely. Framing: v2.0.0 is
+PrimePCTuner's next major version; the PS app becomes the maintained-but-
+not-actively-developed legacy track under that same release history, not a
+separately-versioned sibling product.
+
+### One app version, not three per-tool versions
+Today's UI shows independent per-tool versions (FPS Optimizer "v0.3",
+Startup Optimizer "v0.1") because they're three separate WPF
+windows/processes. §6.6 collapses that into one pywebview window/one React
+SPA — so there's **one app version** for the whole shipped exe, not three.
+Catalog *content* changes (new checks, level changes) keep tracking through
+the existing per-tool `CHANGES.md` files (`FPSOptimization/CHANGES.md`
+already exists) — that convention doesn't need to change, it's just no
+longer tied to an exe-version number of its own.
+
+### Single source of truth for the version string
+One value, defined once (`python/backend/__version__.py` or a plain
+`python/VERSION` file), consumed three ways — never hand-duplicated:
+- `build.spec` reads it for the PyInstaller exe's Windows file-version
+  resource (Properties → Details tab — today's ps2exe build likely has
+  this blank; low-effort thing to get right this time).
+- `GET /api/version` exposes it over the API.
+- The React footer **fetches it at runtime** from that endpoint — same
+  "fetch, don't bake in" pattern already used for `PCSpecs`/`ToolMeta`
+  (§6.6) — rather than injecting it into the JS bundle at build time. This
+  is what actually prevents version-string drift between what the exe
+  really is and what the UI claims to be, a real bug class otherwise.
+- `frontend/package.json`'s own `version` field is cosmetic/irrelevant —
+  the frontend isn't published as an npm package, so it's not a second
+  source of truth to keep in sync with anything.
+
+### Pre-release checkpoints during the build
+This is a multi-session rewrite. Use GitHub pre-release tags
+(`v2.0.0-alpha.1`, `-alpha.2`, …, `-beta.1`) for your own in-progress
+testing builds as the scaffold comes together, each marked "pre-release"
+(not "latest") on GitHub. The **first `v2.0.0` tag** (non-prerelease,
+marked latest) only happens once it clears the same verification bar the
+v1.0.0 PS release already set: clean zip extraction → `--self-test` →
+real launch → hub renders specs + both tool cards → each tool's scan
+completes and renders results → apply flow reaches its confirmation modal.
+Apply's actual system-mutating path is verified via the §8.7 Pester
+sandbox suite, not by manually applying changes to a real machine during
+release verification.
+
+### Release assets — same two-asset pattern as today, for the same reason
+PyInstaller can embed `frontend/dist/` inside the onefile exe itself
+(extracted to `_MEIPASS` at runtime), but the `.ps1` catalog engine still
+needs to exist as **real files on disk** next to the exe for `subprocess`
+to invoke (§8). So the release keeps shipping: a bare `PrimePCTuner.exe`
+(same caveat as today — won't actually run standalone without the sibling
+folders) + `PrimePCTuner-v2.0.0-win.zip` containing the exe plus
+`FPSOptimization/`, `StartupOptimization/`, `shared/`.
+
+### CHANGELOG.md — new, doesn't exist today
+Add one repo-root `CHANGELOG.md` narrating the app-level release train
+(`v1.0.0` PS, `v2.0.0` Python, …) with two clearly labeled sections —
+"PrimePCTuner (PowerShell/WPF) — legacy, maintained not actively
+developed" and "PrimePCTuner (Python) — active development" — since the
+repo now genuinely ships two parallel artifacts and there's currently
+nowhere that states which one is "current." Per-tool `CHANGES.md` files
+keep doing what they already do (catalog-content history); this is a new,
+higher-level index above them.
+
+### No new release automation
+No semantic-release / conventional-commits / auto-version-bump tooling —
+version bumps and tags stay a manual, deliberate act (a human — or Claude,
+on explicit request — edits the one version file and creates the git tag),
+the same way both PS renames and the v1.0.0 release were already done with
+explicit end-to-end verification each time. Consistent with §8.7's "no
+pre-commit framework" call: this codebase adds automation for things that
+are safe to automate, not for gates that should stay a deliberate human
+checkpoint.
+
+### Dependency on the still-open `main` question
+None of this can produce a real `v2.0.0` tag until `main` exists — it's
+currently **unborn**, and per the standing git rule that's a hard stop
+requiring explicit approval, already flagged as pending in §10 and in
+memory. Not resolving that here; just noting the release process is
+blocked on it, not forgotten.
+
 ## 9. Explicitly out of scope for this first cut
 
 - Anything beyond hub view + one tool's checklist view + the apply/undo
