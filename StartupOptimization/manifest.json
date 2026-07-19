@@ -1,0 +1,33 @@
+[
+  {
+    "_comment": "This is the STATIC portion of Startup Optimizer's catalog only (formerly Level 3: Windows Extras + Leftover Toggles). The dynamic portion (Run keys, startup-folder shortcuts, logon scheduled tasks — formerly Levels 1-2) is discovered live per PC via changes/PC Startup/Enumerate.ps1 at scan time, not listed here. Several entries below share the exact same script as an FPS Optimizer manifest entry (§3, §0 #5) — the two former catalogs' Widgets/Copilot/aimgr/Edge-boost items were identical duplicates, merged into one canonical script each."
+  },
+  { "Id": "2A.3", "Level": 3, "Module": "Windows Extras", "Name": "Remove Widgets apps",
+    "Desc": "News/widgets feed pipeline (WebExperience + WidgetsPlatformRuntime). The Settings \"Widgets\" toggle disappears after removal — expected.",
+    "Target": "both packages absent", "DefaultChecked": true,
+    "Script": "changes/Windows Changes/2A.3_RemoveWidgetsApps.ps1" },
+  { "Id": "1.7", "Level": 3, "Module": "Windows Extras", "Name": "Widgets / news feed off (policy)",
+    "Desc": "Blocks the widgets/news pipeline by policy so Windows Update can't quietly bring it back to life.",
+    "Target": "AllowNewsAndInterests = 0", "DefaultChecked": true,
+    "Script": "changes/Windows Changes/1.7_WidgetsPolicy-Off.ps1" },
+  { "Id": "2A.2", "Level": 3, "Module": "Windows Extras", "Name": "Remove Copilot",
+    "Desc": "The AI assistant most people never asked for — removes its background presence.",
+    "Target": "package absent", "DefaultChecked": true,
+    "Script": "changes/Windows Changes/2A.2_RemoveCopilot.ps1" },
+  { "Id": "2A.1", "Level": 3, "Module": "Windows Extras", "Name": "Remove Microsoft AI Manager (aimgr)",
+    "Desc": "Background AI component. Windows Update reinstalls it — re-run this tool after big updates.",
+    "Target": "package absent", "DefaultChecked": true,
+    "Script": "changes/Windows Changes/2A.1_RemoveAiManager.ps1" },
+  { "Id": "1.9", "Level": 3, "Module": "Windows Extras", "Name": "Block Edge startup boost (policy)",
+    "Desc": "Edge preloads at logon. Policy stops it. WebView2 security updates are untouched.",
+    "Target": "StartupBoostEnabled = 0", "DefaultChecked": true,
+    "Script": "changes/Windows Changes/1.9_EdgeStartupBoost-Off.ps1" },
+  { "Id": "1.10", "Level": 3, "Module": "Windows Extras", "Name": "Block Edge background mode (policy)",
+    "Desc": "Edge lingers after you close it. Policy stops it. WebView2 security updates are untouched.",
+    "Target": "BackgroundModeEnabled = 0", "DefaultChecked": true,
+    "Script": "changes/Windows Changes/1.10_EdgeBackgroundMode-Off.ps1" },
+  { "Id": "X.1", "Level": 3, "Module": "Leftover Toggles", "Name": "Purge inert StartupApproved leftovers",
+    "Desc": "Old enable/disable toggle entries whose actual startup entry is long gone — registry clutter from uninstalled apps. Names are matched exactly (some have trailing spaces).",
+    "Target": "no orphaned StartupApproved entries", "DefaultChecked": true,
+    "Script": "changes/Windows Changes/X.1_PurgeStartupApprovedLeftovers.ps1" }
+]
