@@ -10,7 +10,12 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot '..\shared\PrimeUI.ps1')
 Invoke-PrimeBootstrap -SelfTest:$SelfTest -ScriptPath $PSCommandPath
-. (Join-Path $PSScriptRoot 'lib\Catalog.ps1')
+
+# Catalog is now individual scripts under ..\changes\<Sector>\*.ps1 (§3),
+# not an in-process scriptblock list — manifest.json just points to them.
+$OptimizationCatalog = @(Get-PrimeManifestItems `
+    -ManifestPath (Join-Path $PSScriptRoot 'manifest.json') `
+    -RepoRoot (Split-Path -Parent $PSScriptRoot))
 
 $ctx = New-PrimeChecklistApp `
     -Title       'FPS Optimizer' `

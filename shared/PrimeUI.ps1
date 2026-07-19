@@ -1,7 +1,7 @@
 ﻿# PrimeUI.ps1 — shared UI framework for the PrimePCTuner suite.
 # Palette, window bootstrap (elevation/STA/WPF), PC-specs detection, spec chips,
 # and the branded checklist window + dry-run scan engine used by every tool.
-# Dot-source this BEFORE a tool's lib\Catalog.ps1.
+# Dot-source this BEFORE a tool loads its manifest.json (Get-PrimeManifestItems).
 
 # ---------- brand palette (prime_theme / PrimeStocks App.css) ----------
 $Script:P = @{
@@ -254,6 +254,69 @@ function Set-PrimeRowStatus {
     $Row.Detail.Text = $Detail
 }
 
+# ---------- resolve a real PowerShell host (shared by the hub's Launch
+# buttons and Invoke-PrimeChangeScript below — one resolution, cached) ----------
+$Script:PrimePSExe = $null
+function Get-PrimePSExe {
+    if ($Script:PrimePSExe) { return $Script:PrimePSExe }
+    foreach ($cand in 'pwsh.exe', 'powershell.exe') {
+        $cmd = Get-Command $cand -ErrorAction SilentlyContinue
+        if ($cmd) { $Script:PrimePSExe = $cmd.Source; return $Script:PrimePSExe }
+    }
+    $null
+}
+
+# ---------- shell out to an individual changes\<Sector>\*.ps1 script ----------
+# Replaces the old in-process "& $Item.Check" scriptblock call (§3 — the
+# catalog is now individual scripts, not a shared in-memory list). This
+# process is already elevated (Invoke-PrimeBootstrap ran first), so the
+# child inherits that elevation automatically — no -Verb RunAs here.
+function Invoke-PrimeChangeScript {
+    param($Item, [ValidateSet('Check', 'Apply', 'Undo')][string]$Mode = 'Check', [string]$PreviousValueJson)
+
+    # Placeholder rows (Enumerate.ps1's "nothing found" entries) have no
+    # backing script — they're always compliant, no subprocess needed.
+    if (-not $Item.ScriptPath) { return [pscustomobject]@{ Current = 'clean'; Compliant = $true } }
+
+    $psExe = Get-PrimePSExe
+    if (-not $psExe) { throw 'No PowerShell host (pwsh or powershell.exe) found on this PC.' }
+
+    # No -Json flag here — the individual change scripts always emit JSON
+    # unconditionally (there's no other output mode), so they never declared
+    # -Json as a parameter; passing it would be an unrecognized-param error.
+    $argList = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $Item.ScriptPath, "-$Mode")
+    foreach ($k in $Item.ScriptArgs.Keys) { $argList += @("-$k", [string]$Item.ScriptArgs[$k]) }
+    if ($Mode -eq 'Undo' -and $PreviousValueJson) { $argList += @('-PreviousValueJson', $PreviousValueJson) }
+
+    $json = & $psExe @argList 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $json) { throw "script exited $LASTEXITCODE for $($Item.Id)" }
+    $obj = $json | ConvertFrom-Json -ErrorAction Stop
+    if ($obj.PSObject.Properties['Error']) { throw $obj.Error }
+
+    if ($Mode -eq 'Check') {
+        $compliant = switch ($obj.Status) { 'APPLIED' { $true }; 'PENDING' { $false }; default { $null } }
+        return [pscustomobject]@{ Current = $obj.Current; Compliant = $compliant }
+    }
+    $obj
+}
+
+# ---------- load a tool's static catalog from its manifest.json ----------
+# Shared by both Start-FPSOptimization.ps1 and Start-StartupOptimization.ps1
+# — resolves each entry's sector-relative Script path to an absolute one.
+function Get-PrimeManifestItems {
+    param([string]$ManifestPath, [string]$RepoRoot)
+    $entries = @(Get-Content -Path $ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+    foreach ($e in $entries) {
+        if (-not $e.PSObject.Properties['Id']) { continue }   # skip _comment entries
+        [pscustomobject]@{
+            Id = $e.Id; Level = $e.Level; Module = $e.Module; Name = $e.Name
+            Desc = $e.Desc; Target = $e.Target; DefaultChecked = [bool]$e.DefaultChecked
+            ScriptPath = Join-Path $RepoRoot $e.Script
+            ScriptArgs = @{}
+        }
+    }
+}
+
 # ---------- dry-run scan engine ----------
 function Invoke-PrimeScan {
     param($Ctx)
@@ -274,7 +337,7 @@ function Invoke-PrimeScan {
             continue
         }
         try {
-            $res = & $r.Item.Check
+            $res = Invoke-PrimeChangeScript -Item $r.Item -Mode Check
             switch ($res.Compliant) {
                 $true   { Set-PrimeRowStatus $r 'APPLIED' $res.Current; $counts.applied++; $st = 'APPLIED' }
                 $false  { Set-PrimeRowStatus $r 'PENDING' $res.Current; $counts.pending++; $st = 'PENDING' }

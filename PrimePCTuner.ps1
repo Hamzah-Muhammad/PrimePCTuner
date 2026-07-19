@@ -92,11 +92,8 @@ Add-PrimeSpecChips -Panel $specsPanel -Window $window -Specs $specs
 # Resolve a real PowerShell host to launch the tool scripts with — never re-invoke our own
 # process path here, since that breaks once this hub is compiled to PcOptimizer.exe (a
 # standalone binary that only knows how to run its own embedded script, not -File args).
-$PSExe = $null
-foreach ($cand in 'pwsh.exe', 'powershell.exe') {
-    $cmd = Get-Command $cand -ErrorAction SilentlyContinue
-    if ($cmd) { $PSExe = $cmd.Source; break }
-}
+# Shared with Invoke-PrimeChangeScript's per-item subprocess calls (PrimeUI.ps1).
+$PSExe = Get-PrimePSExe
 if (-not $PSExe) {
     [Windows.MessageBox]::Show('No PowerShell host (pwsh or powershell.exe) found on this PC — cannot launch tools.', 'PrimePCTuner', 'OK', 'Error') | Out-Null
 }
