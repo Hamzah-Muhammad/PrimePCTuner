@@ -691,7 +691,10 @@ blocked on it, not forgotten.
 
 ## 10. Next step
 
-Design is approved (§0). Next session's work: implement §3 (`PrimeHeadless.ps1`
+Design is approved (§0) and now **fully specified end-to-end** — elevation
+(§3.5), bridge robustness (§5.5), React structure/routing (§6.6), apply
+engine (§8.5), dev/CI tooling (§8.7), and versioning/release (§8.8) are all
+locked. Next session's work: implement §3 (`PrimeHeadless.ps1`
 + `-Headless` flags on the two tool entry points) first, verify headless
 `-ListCatalog`/`-Scan` output matches the existing JSON shape byte-for-byte
 against a real scan, *then* start the `python/` scaffold in §7.
