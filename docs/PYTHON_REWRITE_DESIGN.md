@@ -18,11 +18,19 @@ while keeping the proven PowerShell check catalogs as the scan engine.
 4. **Report location:** scan reports keep writing to the existing
    `FPSOptimization\logs` / `StartupOptimization\logs` folders — same
    history, whether triggered from PS-standalone or Python.
+5. **One change, one script (confirmed 2026-07-19, changes the original
+   draft of §3):** the shared `Catalog.ps1` per tool is replaced by
+   individual `.ps1` files per change, invoked individually by Python —
+   never grouped/batched together — for isolation, auditability, and
+   future per-script allowlisting/signing. FPS's 52 static checks split
+   1:1 into 52 files; Startup's dynamic catalog splits by action type
+   (4 parameterized scripts) since its items aren't known ahead of time.
+   Full design in §3, §5.5, §8.5.
 
 ## 1. Recap of the decision already on record
 
-- FastAPI backend, shelling out to the existing PowerShell catalogs via
-  subprocess, reading the JSON they emit.
+- FastAPI backend, shelling out to individual per-change PowerShell scripts
+  via subprocess (§0 #5, §3), reading the JSON each one emits.
 - pywebview + HTML/CSS frontend, pixel-matching the current dark/green
   Prime theme.
 - Packaged with PyInstaller (more mature single-file exe story than ps2exe).
@@ -38,37 +46,109 @@ behavioral gain — pure risk of regressions with zero user-visible benefit.
 Python's job in this rewrite is orchestration, UI, and packaging — not
 re-deriving `Test-RegValue`/`Test-ServiceStartMode` in a different language.
 
-## 3. Gap to close: today's engine is welded to the WPF UI
+## 3. Gap to close: today's engine is one big file per tool, and welded to the WPF UI
 
-`Invoke-PrimeScan` in `shared\PrimeUI.ps1` currently updates live WPF row
-objects (`$r.CheckBox.IsChecked`, `$r.PillText`, `$r.Detail`) while it scans
-— catalog evaluation and UI painting are one function. That has to be split
-before anything can be driven headlessly from Python.
+Two problems being solved together here, both requiring the same underlying
+split:
 
-**Proposal — new `shared\PrimeHeadless.ps1`:**
-- `Invoke-PrimeCatalogScan -Items $catalog -CheckedIds <string[]|'all'>` —
-  pure function, no UI, returns the same result shape already used for the
-  JSON reports (`Id, Name, Status, Current, Target`).
-- `Invoke-PrimeScan` (WPF path) becomes a thin wrapper: call
-  `Invoke-PrimeCatalogScan` per row, then paint pills from the result —
-  behavior-identical, so the existing PowerShell app still works standalone.
-- A headless bootstrap (no `Add-Type PresentationFramework`, no STA
-  relaunch, no self-elevation prompt) — the Python host elevates itself once
-  and subprocess children inherit that elevation, so PS re-elevating would
-  just be a redundant UAC prompt.
+1. `Invoke-PrimeScan` in `shared\PrimeUI.ps1` updates live WPF row objects
+   while it scans — catalog evaluation and UI painting are one function.
+   That has to be split before anything can be driven headlessly.
+2. **(Decided 2026-07-19, changes the earlier draft of this section):**
+   each individual change gets its **own standalone `.ps1` file**, invoked
+   individually by Python — not one shared `Catalog.ps1` looping over 52
+   in-process scriptblocks. This is a deliberate choice for isolation and
+   auditability, not a performance optimization (see the concurrency
+   note in §5.5 for the cost this introduces and how it's absorbed):
+   - Each script is small enough to read in one sitting and reason about
+     in isolation — reviewing "does item 1.5 do something unexpected"
+     never requires reading a 500-line shared file.
+   - A bug or bad edit in one script's `Apply` logic can't reach code it
+     has no reference to, the way a shared-scope catalog file always
+     risks.
+   - It opens the door to **per-script allowlisting later** — Python could
+     hash-pin the exact set of approved scripts and refuse to invoke
+     anything that doesn't match, which is only practical at this
+     granularity (a hash over one 500-line shared file tells you "the
+     whole catalog changed," not "which one item changed"). Not built in
+     v1, but the file layout is what makes it possible later.
+   - Low-level I/O primitives (`Test-RegValue`, `Set-RegValueTracked`,
+     `Test-ServiceStartMode`, …) stay in a **shared** helper library —
+     duplicating registry get/set plumbing into 50+ files would be *more*
+     risk surface, not less. What's isolated per-file is the **policy**
+     (which path, which value, which target) — that's the part actually
+     worth auditing per-change.
 
-**New per-tool headless entry points** (thin, mirrors existing
-`Start-FPSOptimization.ps1`):
+### FPS Optimizer — static catalog, splits 1:1
+
+52 known-in-advance checks → 52 files, `FPSOptimization\changes\
+<Id>_<Slug>.ps1` (e.g. `1.1_Telemetry-Minimum.ps1`). Each one:
+- Dot-sources `shared\PrimeChecks.ps1` (the I/O primitives) and
+  `shared\PrimeHeadless.ps1` (mode-dispatch/JSON-output plumbing, no
+  WPF/elevation — same headless bootstrap concept as before).
+- Implements exactly one item's `-Check -Json`, `-Apply -Json`, and
+  `-Undo -Json -PreviousValueJson <json>` modes.
+- ~15–30 lines: dot-source, call the shared primitive with this item's
+  specific path/name/value, switch on mode, print JSON.
+- Item **metadata** (`Id/Level/Module/Name/Desc/Target/DefaultChecked`)
+  moves out of the scripts entirely, into `FPSOptimization\changes\
+  manifest.json` — a single static file Python reads **directly, with no
+  subprocess call at all**, so listing the catalog for the checklist UI
+  stays instant (no reason to spawn 52 processes just to render
+  checkboxes). The manifest also carries each item's `Script` filename, so
+  Python knows exactly which file to invoke for a given `Id`.
+
+### Startup Optimizer — dynamic catalog, splits by action type, not by instance
+
+Startup's items aren't known ahead of time — which Run-key entries or
+scheduled tasks exist depends on what's actually installed on *this* PC,
+discovered live at scan time. There's no fixed list of items to pre-split
+into static files the way FPS has. The same isolation principle applies at
+the only granularity a dynamic catalog actually allows: **one script per
+action type**, parameterized per discovered instance, not one script per
+instance:
+- `StartupOptimization\changes\Enumerate.ps1 -Json` — the discovery step
+  (replaces today's dynamic-catalog-build logic in `Catalog.ps1`). Lists
+  everything currently on this PC across the 4 categories below, with
+  enough identifying detail (registry path+name, file path, task
+  path+name) for Python to know what to pass to the action scripts. Plays
+  the same "fast, single-call listing" role FPS's `manifest.json` plays —
+  except it has to actually run (it's PC-specific), so it's one subprocess
+  call, not a static read.
+- `StartupOptimization\changes\RunKeyEntry.ps1 -RegPath ... -ValueName ...
+  -Check|-Apply|-Undo -Json`
+- `StartupOptimization\changes\StartupFolderShortcut.ps1 -FilePath ...
+  -Check|-Apply|-Undo -Json` (Apply backs up the file before deleting it,
+  per §8.5 — unchanged by this split)
+- `StartupOptimization\changes\ScheduledTask.ps1 -TaskPath ... -TaskName
+  ... -Check|-Apply|-Undo -Json`
+- `StartupOptimization\changes\WindowsExtra.ps1 -RegPath ... -ValueName
+  ... -Check|-Apply|-Undo -Json`
+
+### Consequence for the existing WPF app (still kept indefinitely, §0 #3)
+
+`Invoke-PrimeScan`/`New-PrimeChecklistApp` currently dot-source one
+`Catalog.ps1` and run checks **in-process** as scriptblocks. With the
+catalog logic moved into standalone per-change scripts, the WPF app has to
+shell out to them too — the same subprocess-per-item pattern Python uses,
+not a second, duplicate in-process copy of the same logic (that would
+recreate exactly the "grouped together" problem this whole change is
+solving, just in a second place). This is a real, contained change to
+`PrimeUI.ps1`'s scan loop, not a cosmetic one — flagging it now so it's
+expected work when §3 gets implemented, not a surprise. The WPF app is
+still "kept indefinitely" per §0 #3; its internal plumbing just becomes
+consistent with the new architecture instead of forking from it.
+
+**Headless entry points still exist per tool, but now they're thin
+dispatchers to individual scripts, not scan runners themselves:**
 ```
-Start-FPSOptimization.ps1 -Headless -ListCatalog -Json
-Start-FPSOptimization.ps1 -Headless -Scan -Json -Checked "1.1,1.2,1.T,..."
+Start-FPSOptimization.ps1 -Headless -Check -Json -Id "1.1"
+Start-FPSOptimization.ps1 -Headless -Apply -Json -Id "1.1"
+Start-FPSOptimization.ps1 -Headless -Undo  -Json -Id "1.1" -PreviousValueJson '...'
 ```
-- `-ListCatalog`: dumps catalog metadata only (`Id/Level/Module/Name/Desc/
-  Target/DefaultChecked`) — fast, no checks run. Lets the frontend render
-  checkboxes immediately, same as the WPF app building rows before the
-  first scan finishes.
-- `-Scan`: runs `Invoke-PrimeCatalogScan` for the given ids, prints one JSON
-  array to stdout. This is the slow call (today's auto-scan-on-launch).
+(In practice Python's `ps_bridge.py` can invoke `changes\<Id>_<Slug>.ps1`
+directly using the manifest's `Script` field — the entry-point wrapper
+above is a convenience/stable-CLI-surface layer, not a required hop.)
 
 ## 3.5 Elevation flow (Python side)
 
@@ -111,9 +191,10 @@ at-startup model (no per-tool relaunch, no STA/WPF concerns).
 ## 4. Data contracts (already ~90% defined by the existing JSON logs)
 
 ```jsonc
-// CatalogItem
+// CatalogItem — now carries which script implements it (§3, §0 #5)
 { "Id": "1.1", "Level": 1, "Module": "Telemetry & Privacy",
-  "Name": "...", "Desc": "...", "Target": "...", "DefaultChecked": true }
+  "Name": "...", "Desc": "...", "Target": "...", "DefaultChecked": true,
+  "Script": "1.1_Telemetry-Minimum.ps1" }
 
 // ScanResult (unchanged from today's DryRun_*.json)
 { "Id": "1.1", "Name": "...", "Status": "APPLIED|PENDING|REVIEW|SKIPPED|ERROR",
@@ -125,14 +206,18 @@ Pydantic models in `python/backend/models.py` mirror these 1:1.
 
 - `GET /api/tools` — static tool list (mirrors `$Tools` in the hub) + cached
   PC specs (`Get-PCSpecs`, called headlessly once at startup).
-- `GET /api/{tool}/catalog` — subprocess → `-ListCatalog -Json`.
-- `POST /api/{tool}/scan {checked: [ids]}` — subprocess → `-Scan -Json
-  -Checked ...`; backend writes the `.md`/`.json` report (port the report
-  section of `Invoke-PrimeScan` into Python — simple string/JSON writing,
-  no reason to keep it PS-side).
+- `GET /api/{tool}/catalog` — **FPS**: reads `manifest.json` directly, no
+  subprocess. **Startup**: one subprocess call to `Enumerate.ps1 -Json`
+  (§3). Either way, one fast call/read — never N calls for N items.
+- `POST /api/{tool}/scan {checked: [ids]}` — invokes each checked id's own
+  `changes\*.ps1` script individually via a bounded thread pool (§5.5),
+  collects the per-item results into the same array shape as before;
+  backend writes the `.md`/`.json` report (port of the old report section —
+  simple string/JSON writing, no reason to keep it PS-side).
 - `GET /api/{tool}/report/latest` — serve the last report.
 - `POST /api/{tool}/apply {checked: [ids]}` and `POST /api/{tool}/undo` —
-  now designed in §8.5 (was deferred/undesigned as of the previous draft).
+  same per-item individual invocation, but **sequential**, not pooled (§5.5,
+  §8.5).
 - Runs as a single local process — `uvicorn` in a background thread inside
   the same elevated process pywebview opens the window from, bound to
   `127.0.0.1` on a random free port. No network exposure.
@@ -165,20 +250,49 @@ failure-mode handling, not just a happy-path wrapper.
   [System.Text.Encoding]::UTF8` before printing JSON; Python passes
   `encoding='utf-8'` explicitly to `subprocess.run(...)`, never relies on
   the default.
-- **Timeouts** (two profiles, not one):
-  - `-ListCatalog`: 15s ceiling — metadata-only, should return in low
-    single-digit seconds even for Startup's live enumeration.
-  - `-Scan`: 120s ceiling — 52+ checks, some shelling out per-item to
-    `fsutil`/`powercfg`. `subprocess.run(..., timeout=...)` already kills
-    the child on expiry; on `TimeoutExpired`, return a structured error —
-    never let a hung PS process hang an HTTP request indefinitely (a
-    failure mode that couldn't happen in the old synchronous WPF model).
-- **Exit-code contract**: headless PS entry points exit `0` whenever they
-  produced a JSON payload — including when individual checks errored
-  (those surface as per-item `Status: "ERROR"` inside the JSON; that's
-  normal). Non-zero exit means the *engine* broke (catalog failed to load,
-  unhandled top-level exception) — `ps_bridge.py` treats that as a hard
-  `PSBridgeError` and never tries to salvage partial stdout.
+- **One-script-per-change invocation model (§3) — cost and how it's
+  absorbed:** each checked item is now its own `subprocess.run` call
+  instead of one item ID passed into a shared batch call. A cold PS
+  process spawn costs roughly 150–300ms before any actual check logic
+  runs; 52 *sequential* spawns would be 8–16s of pure overhead before a
+  single registry read happens. Two mitigations, applied differently by
+  operation because they have different risk profiles:
+  - **Scan (`-Check`, read-only): run concurrently**, via a bounded thread
+    pool (`concurrent.futures.ThreadPoolExecutor`, ~8 workers). Checks are
+    independent and side-effect-free, so there's no ordering risk — this
+    is what keeps a 52-item scan's wall-clock time reasonable despite the
+    per-item process overhead. The existing "one scan in flight per tool"
+    lock (already decided) is unchanged — it still guards the *whole scan
+    operation*, which now internally fans out to N pooled calls instead of
+    one batch call.
+  - **Apply (`-Apply`/`-Undo`, mutating): run sequentially, not pooled.**
+    Safety and a simple, easy-to-reason-about incremental undo log (§8.5)
+    matter more here than wall-clock time — and the "blocking spinner, up
+    to ~2 min" apply UX (§6.6) already budgeted for this being the slower
+    of the two operations.
+- **Timeouts** (per-call, not per-batch, now that batches don't exist):
+  - Catalog listing: 15s ceiling (FPS's manifest read is instant; Startup's
+    `Enumerate.ps1` call is the one that needs the ceiling).
+  - Each individual `-Check`/`-Apply`/`-Undo` call: ~10–15s ceiling —
+    generous margin over the ~150–300ms process overhead plus what's
+    typically sub-second check logic (even the `fsutil`/`powercfg`-shelling
+    items). `subprocess.run(..., timeout=...)` kills the child on expiry;
+    on `TimeoutExpired`, that one item's result becomes a structured
+    error — it does **not** need to abort the rest of the pool/sequence
+    (see the next point).
+  - Overall scan/apply operation: keep a coarser ~120s ceiling as a circuit
+    breaker on the whole pooled/sequential run, in case something
+    pathological happens (e.g. the thread pool itself hangs) — belt and
+    suspenders over the per-item timeout, not a replacement for it.
+- **Exit-code contract, now scoped per script instead of per batch**: each
+  individual script exits `0` whenever it produced a JSON payload for its
+  one item — including a `Status: "ERROR"` result for that item (normal).
+  Non-zero exit from one script is a hard `PSBridgeError` **for that Id
+  only** — `ps_bridge.py` never salvages partial stdout from that one call,
+  but critically, one broken or tampered script can no longer poison an
+  entire batch's results the way a bug inside the old shared `Catalog.ps1`
+  could have. This is a real robustness improvement the per-script split
+  buys for free, not just a cost to absorb.
 - **Never paper over an engine failure**: if `returncode == 0` but
   `json.loads(stdout)` still fails (malformed output), that's also a hard
   `PSBridgeError` surfaced with `stdout`/`stderr`/`returncode` attached —
@@ -186,16 +300,23 @@ failure-mode handling, not just a happy-path wrapper.
   that will eventually gate real system changes once the apply engine
   exists; a silently-empty "nothing to do" result would be actively
   misleading, worse than a visible error.
-- **Concurrency**: one scan in flight per tool at a time — a simple
-  per-tool lock in `ps_bridge.py`, not a global lock (the hub can
-  plausibly show cached state for both tools independently) and not a
-  queueing system (single-user local desktop app — a lock that just
-  rejects/waits is enough).
-- **Execution model**: plain blocking `subprocess.run()` inside a sync
-  FastAPI route handler — FastAPI runs sync `def` routes in a thread pool
-  automatically, so no `asyncio.create_subprocess_exec` is needed. This is
-  a deliberate simplification: the app has exactly one concurrent user, so
-  async subprocess plumbing would be pure ceremony.
+- **Outer concurrency guard**: one scan (or apply) operation in flight per
+  tool at a time — a simple per-tool lock in `ps_bridge.py`, not a global
+  lock (the hub can plausibly show cached state for both tools
+  independently) and not a queueing system (single-user local desktop app
+  — a lock that just rejects/waits is enough). This guards the whole
+  operation; the inner per-item thread pool (scan) or sequential loop
+  (apply) described above runs *inside* that single held lock.
+- **Execution model**: every individual PS invocation is still a plain
+  blocking `subprocess.run()` — no `asyncio.create_subprocess_exec`
+  anywhere. What's new versus the original one-call-per-batch design is
+  that a scan's route handler now dispatches N of those blocking calls
+  through a `ThreadPoolExecutor` (§ concurrency note above) instead of
+  making one call; apply's route handler makes them in a plain sequential
+  loop. Either way FastAPI's sync-route thread-pooling handles the outer
+  request without any async subprocess plumbing — that simplification
+  still holds, it just now applies at the level of "one route handler
+  orchestrating N calls" rather than "one route handler making one call."
 - **Frozen-path resolution**: like PS's `$PSScriptRoot` fallback,
   `ps_bridge.py` needs a dual-mode resolver for the target `.ps1` path —
   `Path(__file__).parent` in dev, the PyInstaller-extracted sibling-folder
@@ -345,12 +466,24 @@ in scope now.
 
 ```
 C:\Apps\PrimePCTuner\
-  FPSOptimization\lib\Catalog.ps1        (unchanged — the engine)
-  StartupOptimization\lib\Catalog.ps1    (unchanged — the engine)
-  shared\PrimeUI.ps1                     (unchanged — WPF app keeps working)
-  shared\PrimeHeadless.ps1               (NEW — engine split out, §3)
-  FPSOptimization\Start-FPSOptimization.ps1        (+ -Headless flag, §3)
-  StartupOptimization\Start-StartupOptimization.ps1 (+ -Headless flag, §3)
+  FPSOptimization\changes\               (NEW — replaces lib\Catalog.ps1, one file per item, §3)
+    manifest.json                          — static metadata for all 52 items, read directly by Python
+    1.1_Telemetry-Minimum.ps1               — one item's Check/Apply/Undo, ~15-30 lines
+    1.2_StartMenuAds-Off.ps1
+    ... (52 total)
+  StartupOptimization\changes\           (NEW — replaces lib\Catalog.ps1, one file per ACTION TYPE, §3)
+    Enumerate.ps1                           — discovery step, PC-specific, one subprocess call
+    RunKeyEntry.ps1                          — Check/Apply/Undo, parameterized per discovered entry
+    StartupFolderShortcut.ps1
+    ScheduledTask.ps1
+    WindowsExtra.ps1
+  shared\PrimeUI.ps1                     (WPF app kept working, but its scan loop now shells out
+                                           to changes\*.ps1 per item instead of running in-process, §3)
+  shared\PrimeChecks.ps1                 (NEW — shared I/O primitives: Test-RegValue, Set-RegValueTracked,
+                                           Test-ServiceStartMode, etc., dot-sourced by every change script)
+  shared\PrimeHeadless.ps1               (NEW — mode-dispatch/JSON-output plumbing, no WPF/elevation, §3)
+  FPSOptimization\Start-FPSOptimization.ps1        (+ -Headless flag, thin dispatcher to changes\*.ps1, §3)
+  StartupOptimization\Start-StartupOptimization.ps1 (+ -Headless flag, thin dispatcher to changes\*.ps1, §3)
   python\
     app.py                  — entry: elevation check, start uvicorn thread, open pywebview window
     backend\
@@ -399,14 +532,17 @@ This is the piece that actually changes the system, so it gets the same
 dry-run got the suite this far precisely by promising nothing changes;
 apply has to keep that trust by promising every change is undoable.
 
-### Catalog schema change (PS side)
+### Apply/Undo modes on the per-change scripts (§3)
 
-Today `Add-CatalogItem` only carries a read-only `Check` scriptblock. Apply
-needs a paired `Apply` scriptblock per item, and — critically — `Check`'s
-`Current` field is a **display string** ("AllowTelemetry = 1"), not a typed
-value, so it can't be replayed to undo a change. Fix: Apply scriptblocks
-are self-contained — they read the old value themselves, write the new
-one, and return both:
+Each item's standalone script (`changes\<Id>_<Slug>.ps1` for FPS, the
+per-action-type scripts for Startup) needs `-Apply -Json` and `-Undo -Json`
+modes alongside `-Check -Json` — and critically, `-Check`'s `Current`
+field is a **display string** ("AllowTelemetry = 1"), not a typed value,
+so it can't be replayed to undo a change. Fix: `-Apply` calls a
+self-contained shared primitive from `shared\PrimeChecks.ps1` that reads
+the old value itself, writes the new one, and returns both — the script
+doesn't need its own bespoke read-old/write-new logic, just a one-line
+call to the right tracked primitive for its one setting:
 
 ```powershell
 # New sibling helpers alongside the existing Test-RegValue etc.
@@ -459,17 +595,22 @@ once-a-day coarse backstop on top of it, not the only line of defense.
   never trusted from client state alone, since this mutates the system.
   `REVIEW` items (`Compliant = $null`) are **never** eligible for apply —
   that status exists specifically because the item needs human judgment.
-- Sequential, catalog order, one pass — same try/catch-per-item model as
-  `Invoke-PrimeCatalogScan` (§3): one item's failure doesn't block the
-  other independent items, it's just recorded as `ERROR` and skipped for
-  undo purposes (nothing to undo if nothing was written).
+- **Sequential, one item at a time** — per §5.5's concurrency split, apply
+  invokes each item's script individually and sequentially (not pooled
+  like scan): one item's failure doesn't block the other independent
+  items, it's just recorded as `ERROR` and skipped for undo purposes
+  (nothing to undo if nothing was written) — the same try/catch-and-
+  continue posture as before, just expressed as a Python-side loop over
+  individual subprocess calls now instead of an in-process PS loop.
 - The suite's existing hard guardrails (Defender real-time never touched,
   anticheat services Manual-never-Disabled, no Temp/root Defender
-  exclusions, WAN Miniport never touched) are enforced by **catalog
-  authorship, not runtime logic** — the catalog is small and human-curated,
-  so any future item's `Apply` scriptblock gets manually checked against
-  these guardrails before being added, same as today's `Check` scriptblocks
-  already are.
+  exclusions, WAN Miniport never touched) are enforced by **authorship
+  review, not runtime logic** — the catalog is a small, human-curated set
+  of files (52 for FPS, 4 action-type scripts for Startup), so any new or
+  edited script's `-Apply` logic gets manually checked against these
+  guardrails before being added — and the per-script split actually makes
+  that review easier, since each file's blast radius is legible at a
+  glance instead of buried in one shared catalog.
 - **Game-aware pre-flight, not per-item**: before an apply run starts, a
   `Test-GameRunningTracked` check (known game process names via
   `Get-Process`) — if a game is detected, the **entire apply run is
