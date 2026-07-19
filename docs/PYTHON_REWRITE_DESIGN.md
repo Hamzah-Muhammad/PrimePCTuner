@@ -321,24 +321,19 @@ state locally. No Redux/Zustand, no TanStack Query — a single-user local
 app hitting `127.0.0.1` has no caching/pagination/dedup problem those
 libraries solve.
 
-**Open trade-off — scan progress UX (flagged, not decided here):** the WPF
-app scans live — each row flips SCANNING → APPLIED/PENDING/… as
-`Invoke-PrimeScan` works through the list, with a running "Checking 12 of
-52: 1.13…" status line. §5.5's bridge design has PS return **one JSON array
-after the whole scan finishes** — no per-item streaming — so as designed
-above, `ChecklistRow`/`ToolbarBar` can only show a single "Scanning… (up to
-~2 min)" state, then paint every row at once when the `POST /scan` request
-resolves. Three ways to close that gap, increasing complexity:
-1. **Ship the regression** — single blocking spinner, all rows resolve
-   together. Zero bridge changes, matches §5.5 exactly as written.
-2. **NDJSON streaming** — PS prints one JSON line per completed check
-   instead of one array at the end; `ps_bridge.py` streams stdout
-   line-by-line; FastAPI proxies via Server-Sent Events. Real live-progress
-   parity with today's app, but changes §5.5's output contract.
-3. **Polling progress endpoint** — scan runs in a background task, `GET
-   /api/{tool}/scan/progress` polled every ~500ms for an "N of M" counter
-   (progress bar, no per-item live status). Middle ground: some live
-   feedback, smaller bridge change than #2.
+**Decided — scan progress UX (confirmed 2026-07-19): ship the v1 regression.**
+Today's WPF app scans live — each row flips SCANNING → APPLIED/PENDING/…
+as `Invoke-PrimeScan` works through the list, with a running "Checking 12
+of 52: 1.13…" status line. §5.5's bridge returns **one JSON array after the
+whole scan finishes**, so v1's `ToolbarBar` shows a single "Scanning… (up
+to ~2 min)" spinner state and all `ChecklistRow`s paint at once when
+`POST /scan` resolves — no per-row live status. Zero changes to the
+already-locked bridge contract; fastest to build. Two upgrade paths stay on
+the table if this feels too coarse once it's actually running: NDJSON
+stdout streaming proxied as SSE (true per-row parity, changes §5.5's output
+contract), or a polling `GET /scan/progress` background-task endpoint for
+an "N of M" progress bar (middle ground, smaller bridge change). Neither is
+in scope now.
 
 ## 7. Proposed folder structure
 
