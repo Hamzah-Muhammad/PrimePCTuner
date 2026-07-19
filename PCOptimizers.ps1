@@ -1,4 +1,4 @@
-# PCOptimizers.ps1 — the suite hub (PCOptimizationServices)
+﻿# PCOptimizers.ps1 — the suite hub (PCOptimizationServices)
 # Main page: your PC's specs + which tool do you want to run?
 #   · FPS Optimizer     — deep gaming optimization (52 checks, 3 risk levels)
 #   · Startup Optimizer — clean logon/startup junk on everyday PCs
@@ -9,7 +9,11 @@
 param([switch]$SelfTest)
 $ErrorActionPreference = 'Stop'
 
-. (Join-Path $PSScriptRoot 'shared\PrimeUI.ps1')
+# $PSScriptRoot is empty when this script is running compiled (ps2exe) — there's no real
+# .ps1 file on disk at runtime, so fall back to the exe's own folder.
+$ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent ([Diagnostics.Process]::GetCurrentProcess().MainModule.FileName) }
+
+. (Join-Path $ScriptDir 'shared\PrimeUI.ps1')
 Invoke-PrimeBootstrap -SelfTest:$SelfTest -ScriptPath $PSCommandPath
 
 $Tools = @(
@@ -17,20 +21,20 @@ $Tools = @(
         Key   = 'fps';     Name = 'FPS Optimizer';     Tag = 'FOR GAMING RIGS';   TagColor = $P.Green
         Desc  = 'Deep gaming optimization: telemetry & background-contention elimination, service debloat, NIC tuning, and aggressive security trade-offs. 52 checks across 3 risk levels.'
         Meta  = 'v0.3 · 52 checks · dry run'
-        Path  = Join-Path $PSScriptRoot 'FPSOptimization\Start-FPSOptimization.ps1'
+        Path  = Join-Path $ScriptDir 'FPSOptimization\Start-FPSOptimization.ps1'
     }
     @{
         Key   = 'startup'; Name = 'Startup Optimizer'; Tag = 'FOR EVERYDAY PCs'; TagColor = $P.GoldA
         Desc  = 'The toned-down cleaner: lists every app, logon task, and Windows extra (Widgets, Copilot, Edge preload) that launches itself at logon — uncheck the keepers, clear the rest.'
         Meta  = 'v0.1 · dynamic scan · dry run'
-        Path  = Join-Path $PSScriptRoot 'StartupOptimization\Start-StartupOptimization.ps1'
+        Path  = Join-Path $ScriptDir 'StartupOptimization\Start-StartupOptimization.ps1'
     }
 )
 
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="PC Optimizers · Prime Investing"
+        Title="PCOptimizers by @Humzeeny"
         Width="880" Height="640" MinWidth="760" MinHeight="560"
         WindowStartupLocation="CenterScreen" Background="$($P.Bg)"
         FontFamily="Segoe UI" TextOptions.TextFormattingMode="Display">
@@ -68,7 +72,7 @@ $(Get-PrimeTopbarXaml)
 
       <DockPanel Grid.Row="4" Margin="0,12,0,0">
         <TextBlock DockPanel.Dock="Left" FontSize="11.5" Foreground="$($P.Muted)">
-          <Run Foreground="$($P.Green)" Text="@"/><Run Text="humzeeny"/><Run Text="  ·  Prime Investing"/>
+          <Run Foreground="$($P.Green)" Text="@"/><Run Text="Humzeeny"/>
         </TextBlock>
         <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right" FontSize="11.5"
                    Foreground="$($P.Muted)" Text="PC Optimizers hub v0.1"/>
@@ -84,6 +88,18 @@ $cardsHost  = $window.FindName('CardsHost')
 
 $specs = Get-PCSpecs
 Add-PrimeSpecChips -Panel $specsPanel -Window $window -Specs $specs
+
+# Resolve a real PowerShell host to launch the tool scripts with — never re-invoke our own
+# process path here, since that breaks once this hub is compiled to PcOptimizer.exe (a
+# standalone binary that only knows how to run its own embedded script, not -File args).
+$PSExe = $null
+foreach ($cand in 'pwsh.exe', 'powershell.exe') {
+    $cmd = Get-Command $cand -ErrorAction SilentlyContinue
+    if ($cmd) { $PSExe = $cmd.Source; break }
+}
+if (-not $PSExe) {
+    [Windows.MessageBox]::Show('No PowerShell host (pwsh or powershell.exe) found on this PC — cannot launch tools.', 'PCOptimizers', 'OK', 'Error') | Out-Null
+}
 
 foreach ($tool in $Tools) {
     $card = [Windows.Controls.Border]::new()
@@ -120,7 +136,7 @@ foreach ($tool in $Tools) {
     $btn.VerticalAlignment = 'Center'
     $toolPath = $tool.Path
     $btn.Add_Click({
-        Start-Process (Get-Process -Id $PID).Path -ArgumentList '-NoProfile', '-File', "`"$toolPath`""
+        if ($PSExe) { Start-Process $PSExe -ArgumentList '-NoProfile', '-File', "`"$toolPath`"" }
     }.GetNewClosure())
     [Windows.Controls.Grid]::SetColumn($btn, 1)
 

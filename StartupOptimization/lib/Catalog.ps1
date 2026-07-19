@@ -1,4 +1,4 @@
-# Catalog.ps1 — StartupOptimizer catalog. Built DYNAMICALLY at load:
+﻿# Catalog.ps1 — StartupOptimizer catalog. Built DYNAMICALLY at load:
 # every startup surface on this PC is enumerated and becomes one checkbox item.
 # Check scriptblocks are read-only. Nothing in this file writes to the system.
 #

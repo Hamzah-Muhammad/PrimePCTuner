@@ -1,4 +1,4 @@
-# Start-FPSOptimization.ps1 — FPS Optimizer (PCOptimizationServices suite)
+﻿# Start-FPSOptimization.ps1 — FPS Optimizer (PCOptimizationServices suite)
 # Gaming-focused deep optimization: 52 checks across 3 risk levels. DRY RUN —
 # auto-scans on launch, green APPLIED / gold PENDING per item, nothing is changed.
 #
@@ -13,7 +13,7 @@ Invoke-PrimeBootstrap -SelfTest:$SelfTest -ScriptPath $PSCommandPath
 . (Join-Path $PSScriptRoot 'lib\Catalog.ps1')
 
 $ctx = New-PrimeChecklistApp `
-    -Title       'FPS Optimizer · Prime Investing' `
+    -Title       'FPS Optimizer' `
     -Eyebrow     'P C  O P T I M I Z E R S   ·   F O R  G A M I N G  R I G S' `
     -HeadingPlain 'FPS ' -HeadingAccent 'Optimizer' `
     -SubTitle    'Scanned automatically against your system — green means already applied. Uncheck anything you don''t want. Nothing is changed in dry-run mode.' `

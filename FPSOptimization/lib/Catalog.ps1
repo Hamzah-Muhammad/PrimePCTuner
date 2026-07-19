@@ -1,4 +1,4 @@
-# Catalog.ps1 — the optimization catalog as data.
+﻿# Catalog.ps1 — the optimization catalog as data.
 # Each item: Id, Level, Module, Name, Desc, Target, Check (read-only scriptblock).
 # Check returns [pscustomobject] @{ Current = <string>; Compliant = $true|$false|$null; Note = <optional> }
 #   Compliant $true  = already at target        → OK

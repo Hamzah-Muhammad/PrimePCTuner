@@ -1,4 +1,4 @@
-# PrimeUI.ps1 — shared Prime Investing UI framework for the PCOptimizationServices suite.
+﻿# PrimeUI.ps1 — shared Prime Investing UI framework for the PCOptimizationServices suite.
 # Palette, window bootstrap (elevation/STA/WPF), PC-specs detection, spec chips,
 # and the branded checklist window + dry-run scan engine used by every tool.
 # Dot-source this BEFORE a tool's lib\Catalog.ps1.
@@ -208,17 +208,9 @@ function Get-PrimeTopbarXaml {
             </Ellipse.Effect>
           </Ellipse>
           <TextBlock VerticalAlignment="Center" Margin="10,0,0,0" FontSize="14" FontWeight="Bold">
-            <Run Foreground="$($P.Green)" Text="@"/><Run Foreground="$($P.Text)" Text="humzeeny"/>
+            <Run Foreground="$($P.Green)" Text="@"/><Run Foreground="$($P.Text)" Text="Humzeeny"/>
           </TextBlock>
         </StackPanel>
-        <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"
-                   FontSize="12" FontWeight="Bold" Text="PRIME INVESTING">
-          <TextBlock.Foreground>
-            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-              <GradientStop Color="$($P.GoldA)" Offset="0"/><GradientStop Color="$($P.GoldB)" Offset="1"/>
-            </LinearGradientBrush>
-          </TextBlock.Foreground>
-        </TextBlock>
       </DockPanel>
 "@
 }
@@ -393,7 +385,7 @@ $(Get-PrimeTopbarXaml)
 
       <DockPanel Grid.Row="5" Margin="0,10,0,0">
         <TextBlock DockPanel.Dock="Left" FontSize="11.5" Foreground="$($P.Muted)">
-          <Run Foreground="$($P.Green)" Text="@"/><Run Text="humzeeny"/><Run Text="  ·  Prime Investing"/>
+          <Run Foreground="$($P.Green)" Text="@"/><Run Text="Humzeeny"/>
         </TextBlock>
         <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right" FontSize="11.5"
                    Foreground="$($P.Muted)" Text="$FooterNote"/>
