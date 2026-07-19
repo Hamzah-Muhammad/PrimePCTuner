@@ -131,8 +131,8 @@ Pydantic models in `python/backend/models.py` mirror these 1:1.
   section of `Invoke-PrimeScan` into Python — simple string/JSON writing,
   no reason to keep it PS-side).
 - `GET /api/{tool}/report/latest` — serve the last report.
-- **Deferred, not in this cut:** `POST /api/{tool}/apply` — the apply
-  engine is still undesigned in either language; out of scope here.
+- `POST /api/{tool}/apply {checked: [ids]}` and `POST /api/{tool}/undo` —
+  now designed in §8.5 (was deferred/undesigned as of the previous draft).
 - Runs as a single local process — `uvicorn` in a background thread inside
   the same elevated process pywebview opens the window from, bound to
   `127.0.0.1` on a random free port. No network exposure.
@@ -386,10 +386,126 @@ is deleted by this rewrite; Python only adds a new front door.
   WebView2 (preinstalled on Win11). **Node/npm is never required on the
   target PC** — only on the dev machine building the release.
 
+## 8.5 Apply engine design
+
+This is the piece that actually changes the system, so it gets the same
+"never paper over a failure" rigor as §5.5, plus real revert capability —
+dry-run got the suite this far precisely by promising nothing changes;
+apply has to keep that trust by promising every change is undoable.
+
+### Catalog schema change (PS side)
+
+Today `Add-CatalogItem` only carries a read-only `Check` scriptblock. Apply
+needs a paired `Apply` scriptblock per item, and — critically — `Check`'s
+`Current` field is a **display string** ("AllowTelemetry = 1"), not a typed
+value, so it can't be replayed to undo a change. Fix: Apply scriptblocks
+are self-contained — they read the old value themselves, write the new
+one, and return both:
+
+```powershell
+# New sibling helpers alongside the existing Test-RegValue etc.
+function Set-RegValueTracked {
+    param($Path, $Name, $Value)
+    $existed = $false; $prev = $null
+    try { $prev = (Get-ItemProperty $Path $Name -EA Stop).$Name; $existed = $true } catch {}
+    New-Item -Path $Path -Force -EA SilentlyContinue | Out-Null
+    Set-ItemProperty -Path $Path -Name $Name -Value $Value
+    [pscustomobject]@{ Success = $true; PreviouslyExisted = $existed; PreviousValue = $prev }
+}
+```
+Same pattern for `Set-ServiceStartModeTracked`, `Disable-ScheduledTaskTracked`,
+and — for the Startup Optimizer's file-based items — a
+`Remove-StartupEntryTracked` that **copies the shortcut file to a backup
+path before deleting it** (a shortcut's binary content can't be
+reconstructed from a JSON string the way a registry DWORD can; skipping
+this would make those items silently non-revertible, breaking the
+"everything is undoable" promise).
+
+### Undo record + log
+
+Every successful Apply call appends one record to a run's undo log:
+```jsonc
+{ "Id": "1.1", "Kind": "RegistryValue", "Path": "HKLM:\\...", "Name": "AllowTelemetry",
+  "PreviouslyExisted": true, "PreviousValue": 3, "BackupFile": null }
+```
+(`BackupFile` populated only for file-based items, per above.)
+**Written incrementally, one record per successful item — not batched at
+the end** — so a hard crash or forced kill mid-run still leaves a valid
+undo trail for everything that already succeeded; batching to the end
+would silently lose that safety net on exactly the failure path it exists
+for.
+
+### Restore point (coarse safety net, on top of the undo log)
+
+Before the first item of an apply run, `Checkpoint-Computer -Description
+"PrimePCTuner pre-apply <timestamp>"`. **Known gotcha**: Windows throttles
+System Restore to one checkpoint per `SystemRestorePointCreationFrequency`
+(default 1440 min = 24h) — a second apply run same day won't get a fresh
+restore point. Not working around this by touching that registry value
+(scope creep, and it's a system-wide setting, not portable-tool territory)
+— the granular undo log is the primary safety net; the restore point is a
+once-a-day coarse backstop on top of it, not the only line of defense.
+
+### Selection, sequencing, and hard guardrails
+
+- Apply only ever touches ids that are (a) checked in the UI **and** (b)
+  scanned `PENDING` on the most recent scan — re-validated server-side,
+  never trusted from client state alone, since this mutates the system.
+  `REVIEW` items (`Compliant = $null`) are **never** eligible for apply —
+  that status exists specifically because the item needs human judgment.
+- Sequential, catalog order, one pass — same try/catch-per-item model as
+  `Invoke-PrimeCatalogScan` (§3): one item's failure doesn't block the
+  other independent items, it's just recorded as `ERROR` and skipped for
+  undo purposes (nothing to undo if nothing was written).
+- The suite's existing hard guardrails (Defender real-time never touched,
+  anticheat services Manual-never-Disabled, no Temp/root Defender
+  exclusions, WAN Miniport never touched) are enforced by **catalog
+  authorship, not runtime logic** — the catalog is small and human-curated,
+  so any future item's `Apply` scriptblock gets manually checked against
+  these guardrails before being added, same as today's `Check` scriptblocks
+  already are.
+- **Game-aware pre-flight, not per-item**: before an apply run starts, a
+  `Test-GameRunningTracked` check (known game process names via
+  `Get-Process`) — if a game is detected, the **entire apply run is
+  refused** with a clear message, not silently skip-just-that-item. FPS
+  Optimizer's whole premise is "run this between sessions," so a hard
+  pre-flight stop is simpler and safer than per-item judgment calls.
+
+### API + UI (reuses §6.6's already-decided patterns, doesn't reinvent them)
+
+- `POST /api/{tool}/apply {checked: [ids]}` — mirrors `/scan`'s shape.
+  Requires an explicit **second confirmation** in the UI before firing
+  (modal: "About to apply N changes — a System Restore Point will be
+  created first. [Cancel] [Apply N changes]"), the same
+  confirm-before-hard-to-reverse-action posture used everywhere else in
+  this workflow. If any selected item is Level 3/Aggressive, the modal
+  calls that out by count specifically, echoing the existing "AGGRESSIVE"
+  labeling already in the catalog/UI.
+- Progress UX reuses the **already-decided** §6.6 pattern exactly — single
+  blocking spinner, all rows resolve when the request completes. Not
+  re-litigating that decision for a second endpoint.
+- `POST /api/{tool}/undo` — v1 scope is **undo the most recent apply run
+  as a whole**, no partial/single-item undo and no history browser; reads
+  the latest `UndoLog_*.json`, reverses each record (write back
+  `PreviousValue` or delete the key if `PreviouslyExisted` is false,
+  restore the backed-up file, etc.), reports per-item `REVERTED|ERROR`.
+- Reports: `ApplyLog_<timestamp>.json`/`.md` in the same `logs/` folder as
+  today's dry-run reports (§0 decision #4), same shape as `ScanResult` plus
+  `PreviousValue`/`NewValue`. `UndoLog_<timestamp>.json` is a separate,
+  machine-oriented file — superset of info needed to programmatically
+  revert, not meant for human reading.
+
+### Explicitly out of scope for v1 apply engine
+
+- No scheduled/automatic apply — always user-initiated from the UI.
+- No partial undo of a single item from history, no cross-run history
+  browser — v1 undo is "revert the most recent run," full stop.
+- No override of the Windows restore-point throttle.
+
 ## 9. Explicitly out of scope for this first cut
 
-- Apply engine (undesigned before this doc, stays undesigned here).
-- Anything beyond hub view + one tool's checklist view.
+- Anything beyond hub view + one tool's checklist view + the apply/undo
+  flow specified in §8.5.
 
 ## 10. Next step
 
