@@ -237,7 +237,13 @@ failure-mode handling, not just a happy-path wrapper.
 | Frontend | React 19.2.x + Vite 8.x | — | Built with Claude Code's `frontend-design` skill for the UI work; `npm run build` emits static `dist/` files that pywebview points at — Node/npm is a **build-time-only** dependency, not a runtime one (§6) |
 | Packaging | PyInstaller | 6.21.x | `--onefile`, `--add-data` for the bundled `.ps1` engine folders (§8) |
 | PS→Python bridge | `subprocess` (stdlib) | — | No extra package; just `subprocess.run([pwsh_path, '-File', ..., '-Headless', ...], capture_output=True)` and `json.loads()` the stdout |
-| Dev/test | `pytest` for backend unit tests (ps_bridge mocked), `-SelfTest` pattern reused PS-side | — | Mirrors the existing `-SelfTest` convention already used by every `.ps1` entry point |
+| Python lint/format | `ruff` | latest | One tool for both (`ruff check` + `ruff format`) instead of flake8+black+isort — fewer moving parts |
+| Python types | mypy (basic mode) — **pending your call, §8.7** | latest | Optional; Pydantic already validates the highest-risk surface (PS↔Python JSON shape) at runtime |
+| JS/TS lint/format | ESLint (typescript-eslint + react-hooks configs, Vite's default scaffold) + Prettier | latest | Standard for a Vite+React+TS project, not extra ceremony |
+| Backend tests | `pytest` + FastAPI `TestClient`, `ps_bridge` mocked | — | Heaviest coverage on `ps_bridge.py` — highest-risk module (§5.5) |
+| Frontend tests | Vitest + React Testing Library, smoke-level only | — | A handful of tests (routing, StatusPill variants), not full coverage — matches the app's actual size |
+| PS tests | Pester, against a sandboxed `HKCU:\...\_Test\` registry subtree | — | Only way to exercise the apply→undo round-trip (§8.5) without mutating the real CI machine |
+| CI | GitHub Actions, `windows-latest` (mandatory — registry/WPF/WebView2/PowerShell are all Windows-only) | — | Full breakdown in §8.7 |
 
 No database, no auth, no external network calls — the whole app talks to
 itself on `127.0.0.1` and to `pwsh.exe`/`powershell.exe` as a subprocess.
@@ -501,6 +507,99 @@ once-a-day coarse backstop on top of it, not the only line of defense.
 - No partial undo of a single item from history, no cross-run history
   browser — v1 undo is "revert the most recent run," full stop.
 - No override of the Windows restore-point throttle.
+
+## 8.7 Dev/CI tooling
+
+### Python
+- **`ruff`** for both lint and format (`ruff check .` / `ruff format .`)
+  — one tool instead of flake8+black+isort. Matches the "keep the stack
+  thin" posture that's shaped every other tooling call in this doc.
+- **mypy — open question, not decided here (see §8.7a below).**
+
+### React/TS
+- **ESLint** (typescript-eslint + react-hooks configs — Vite's own
+  `--template react-ts` scaffold ships these by default, nothing extra to
+  configure) + **Prettier** for formatting. This is the standard, expected
+  baseline for a Vite+React+TS project, not additional ceremony the way a
+  state library or codegen pipeline would be.
+- **`tsc --noEmit`** as the type-check gate — effectively free since
+  TypeScript was already chosen for `api.ts` (§6.6); no separate tool to
+  add.
+
+### Testing
+- **Backend**: `pytest` + FastAPI's `TestClient` (httpx-based). Heaviest
+  coverage goes to `ps_bridge.py` (§5.5) with `subprocess.run` mocked —
+  it's the highest-risk module in the app, exercising the timeout,
+  non-zero-exit, and malformed-JSON error paths specifically.
+- **Frontend**: Vitest + React Testing Library, **smoke-level only** — a
+  handful of tests (routing switches view on `setView`, `StatusPill`
+  renders the right variant per status) rather than full component
+  coverage. The app is two views and no state library; exhaustive frontend
+  testing would be more ceremony than the surface area justifies.
+- **PowerShell — the one genuinely new piece**: introduce **Pester** to
+  unit-test the new `Set-*Tracked`/undo helpers from §8.5 against a
+  **sandboxed registry subtree** (e.g. `HKCU:\Software\PrimePCTuner\_Test\`,
+  created fresh and torn down per test run) instead of real system paths.
+  This is the only way to actually exercise the apply→undo round-trip
+  (write → capture previous value → undo → assert restored) in CI without
+  mutating the CI machine's real settings — and it directly backs the
+  "everything is undoable" promise §8.5 makes, rather than just asserting
+  it in a design doc. The existing `-SelfTest` convention (headless window
+  build + exit) stays for the read-only entry points; Pester is additive,
+  specifically for the apply/undo logic that `-SelfTest` was never meant
+  to cover.
+
+### CI pipeline
+GitHub Actions, `windows-latest` runner — mandatory, not a choice, since
+registry access, WebView2, and PowerShell are all Windows-only (no cheaper
+`ubuntu-latest` option here). Free for a public repo. Runs on PRs (and
+pushes to feature branches, matching the multi-branch git workflow already
+in use):
+1. **Python**: `ruff check`, `ruff format --check`, `pytest`.
+2. **Frontend**: `npm ci` (not `npm install` — reproducible, lockfile-
+   pinned), `eslint`, `tsc --noEmit`, `vitest run`, `npm run build` (this
+   last step also catches build-breaking errors before merge, for free).
+3. **PowerShell**: Pester suite (sandboxed registry) + `-SelfTest`
+   invocations of every headless entry point — `-ListCatalog`/`-Scan` can
+   run for real in CI since they're read-only; `-Apply`/`-Undo` are only
+   exercised via Pester against the sandbox, never via the real entry
+   point in CI.
+- **Not in v1 CI, deliberately deferred**: a full PyInstaller onefile build
+  in CI. Feasible on `windows-latest` but slow, and there's no code to
+  build yet — add it once the `python/` scaffold exists and this becomes a
+  real question rather than a hypothetical one.
+
+### Local dev loop — no `pre-commit` framework
+Your existing git workflow already has Claude run sanity checks *before*
+showing a diff and asking to commit — adding a `pre-commit` hooks
+framework on top would be a second, overlapping enforcement layer for the
+same thing. Instead, the "sanity checks myself" step just becomes these
+commands, run manually (by Claude, per that existing rule) before every
+commit: `ruff check && ruff format --check && pytest` (Python side),
+`npm run lint && npm run typecheck && npm test` (frontend side). No new
+automation, just filling in what the existing rule already asks for.
+
+### `.gitattributes`
+The repo currently mixes conventions out of necessity — `.ps1` files need
+CRLF + a UTF-8 BOM (the packaging-bugs history in this doc explains why).
+Python/JS ecosystems conventionally use LF. Rather than let this become
+incidental diff noise, add a `.gitattributes` once `python/`/`frontend/`
+exist: `*.ps1 text eol=crlf`, `*.py text eol=lf`, `*.ts *.tsx *.css text
+eol=lf`.
+
+### 8.7a Open question: mypy, yes or no?
+
+Not decided here. The case *for*: catches real type mismatches between
+`ps_bridge.py`'s parsed JSON and the Pydantic models before they become a
+runtime bug. The case *against*: Pydantic already validates that exact
+boundary at runtime, on every request, automatically — a static checker
+would be catching the same class of bug a second, redundant way, and it's
+one more tool + one more CI step for a codebase that's been deliberately
+kept thin at every other turn (no react-router, no state library, no
+codegen, no async subprocess). Recommend skipping it for v1 and revisiting
+if `ps_bridge.py` or `models.py` grow enough that static checking starts
+pulling its weight — but this is genuinely your call, not a default I'm
+picking silently.
 
 ## 9. Explicitly out of scope for this first cut
 
