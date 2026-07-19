@@ -243,6 +243,103 @@ No database, no auth, no external network calls — the whole app talks to
 itself on `127.0.0.1` and to `pwsh.exe`/`powershell.exe` as a subprocess.
 `requirements.txt` will pin exact versions once `python/` is scaffolded.
 
+## 6.6 React app structure & routing
+
+**Routing — hand-rolled, no react-router.** Only two route "shapes" exist
+(Hub, and a single parameterized Tool view for either `fps` or `startup`),
+and pywebview's window is chromeless (no address bar, no back/forward
+chrome) — there's no browser-history UX to preserve. A dependency-free
+state machine in `App.tsx` is simpler and avoids a library that buys
+nothing here, the same "don't add abstractions beyond what's needed" logic
+that already shaped the bridge design (§5.5):
+
+```ts
+type View = { name: 'hub' } | { name: 'tool'; toolKey: 'fps' | 'startup' }
+const [view, setView] = useState<View>({ name: 'hub' })
+```
+
+Navigation is just `setView(...)` calls: a `ToolCard`'s Launch button →
+`{name:'tool', toolKey}`; the topbar/back action in `ToolView` →
+`{name:'hub'}`. (If browser-tab dev iteration ever wants URL sync for
+convenience, that's a few lines of `history.pushState` — not a reason to
+add react-router.)
+
+**Component tree** — maps 1:1 onto the existing XAML resources in
+`PrimeUI.ps1` (the `PrimeCheck`/`BtnSec`/`BtnPri`/`RowCard`/`Chip` styles,
+the two glow ellipses, the topbar fragment), so the port is mechanical, not
+a redesign:
+
+```
+src/
+  App.tsx                    — owns `view` state, fetches PCSpecs+ToolMeta[] once on mount
+  primitives/                — the 5 XAML "Resources" styles, 1:1
+    Chip.tsx                  — Border+Text pill (spec chips, stat chips)
+    Button.tsx                 — variant='primary'|'secondary' (BtnPri/BtnSec)
+    Checkbox.tsx                 — PrimeCheck custom checkbox
+    Card.tsx                      — RowCard gradient-bordered container
+    StatusPill.tsx                 — APPLIED/PENDING/REVIEW/SKIPPED/ERROR/…SCANNING
+  layout/
+    BackgroundGlows.tsx        — the two radial-gradient ellipses, rendered once at app root
+    Topbar.tsx                  — @Humzeeny branded row, shared by both views
+    Footer.tsx                   — @Humzeeny + right-aligned note text (prop: note)
+    PageHeading.tsx                — eyebrow/heading/subtitle block, reused by Hub + Tool
+    SpecsPanel.tsx                   — WrapPanel of <Chip> from PCSpecs, reused by Hub + Tool
+  views/
+    HubView.tsx                 — PageHeading + SpecsPanel + ToolCard × 2
+      ToolCard.tsx                — Name+Tag+Desc+Meta+Launch Button (onClick → setView)
+    ToolView.tsx                — PageHeading + SpecsPanel + StatsPanel + ChecklistPanel + ToolbarBar
+      StatsPanel.tsx               — WrapPanel of scan-count Chips (applied/pending/review/skipped/errors)
+      ChecklistPanel.tsx            — groups CatalogItem[] by Level+Module (mirrors WPF's Group-Object)
+        LevelGroup.tsx                — level/module header + its ChecklistRows
+          ChecklistRow.tsx             — Checkbox + id-pill + Name/Desc/Target + StatusPill
+      ToolbarBar.tsx                 — Select all/none/Uncheck L3/Open report + status text + Re-scan
+  api.ts                      — typed fetch wrappers + the shared TS types below
+  theme.css                   — ported palette + primitive styles from PrimeUI.ps1
+```
+
+**Shared types in `api.ts`** — hand-mirrored from the Pydantic models (§4),
+not code-generated. Only 4 small shapes exist; an OpenAPI-codegen pipeline
+would be more tooling than the surface area justifies — the discipline is
+just "keep these in sync by hand," low-risk at this size:
+
+```ts
+export type PCSpecs = { CPU: string; Cores: string; GPU: string; RAM: string;
+  OS: string; Disks: string; NIC: string; Elevated: boolean }
+export type ToolMeta = { Key: 'fps' | 'startup'; Name: string; Tag: string;
+  Desc: string; Meta: string }
+export type CatalogItem = { Id: string; Level: number; Module: string;
+  Name: string; Desc: string; Target: string; DefaultChecked: boolean }
+export type ScanResult = { Id: string; Name: string;
+  Status: 'APPLIED' | 'PENDING' | 'REVIEW' | 'SKIPPED' | 'ERROR';
+  Current: string; Target: string }
+```
+
+**State management: none beyond `useState`/`useEffect`.** `PCSpecs`/
+`ToolMeta[]` are fetched once in `App.tsx` and passed down as props (only 2
+levels deep — not worth a Context); each view owns its own loading/error
+state locally. No Redux/Zustand, no TanStack Query — a single-user local
+app hitting `127.0.0.1` has no caching/pagination/dedup problem those
+libraries solve.
+
+**Open trade-off — scan progress UX (flagged, not decided here):** the WPF
+app scans live — each row flips SCANNING → APPLIED/PENDING/… as
+`Invoke-PrimeScan` works through the list, with a running "Checking 12 of
+52: 1.13…" status line. §5.5's bridge design has PS return **one JSON array
+after the whole scan finishes** — no per-item streaming — so as designed
+above, `ChecklistRow`/`ToolbarBar` can only show a single "Scanning… (up to
+~2 min)" state, then paint every row at once when the `POST /scan` request
+resolves. Three ways to close that gap, increasing complexity:
+1. **Ship the regression** — single blocking spinner, all rows resolve
+   together. Zero bridge changes, matches §5.5 exactly as written.
+2. **NDJSON streaming** — PS prints one JSON line per completed check
+   instead of one array at the end; `ps_bridge.py` streams stdout
+   line-by-line; FastAPI proxies via Server-Sent Events. Real live-progress
+   parity with today's app, but changes §5.5's output contract.
+3. **Polling progress endpoint** — scan runs in a background task, `GET
+   /api/{tool}/scan/progress` polled every ~500ms for an "N of M" counter
+   (progress bar, no per-item live status). Middle ground: some live
+   feedback, smaller bridge change than #2.
+
 ## 7. Proposed folder structure
 
 ```
@@ -261,11 +358,13 @@ C:\Apps\PrimePCTuner\
       reports.py               — write .md/.json reports (ported from Invoke-PrimeScan)
       models.py                 — pydantic: CatalogItem, ScanResult, ToolMeta
     frontend\                 — React + Vite source (dev-time only, not shipped)
-      src\
-        App.tsx                 — client router: hub view ↔ tool view
-        components\             — Chip, RowCard, StatusPill, ChecklistRow, etc. (§6)
-        theme.css                — ported palette from PrimeUI.ps1 (§6)
-        api.ts                    — typed fetch wrappers for the FastAPI routes (§5)
+      src\                      — full component tree in §6.6
+        App.tsx                   — owns `view` state (hand-rolled router, §6.6)
+        primitives\                — Chip, Button, Checkbox, Card, StatusPill
+        layout\                      — BackgroundGlows, Topbar, Footer, PageHeading, SpecsPanel
+        views\                          — HubView(+ToolCard), ToolView(+StatsPanel/ChecklistPanel/ToolbarBar)
+        api.ts                            — typed fetch wrappers + shared TS types (§6.6, mirrors §4)
+        theme.css                          — ported palette from PrimeUI.ps1 (§6)
       package.json
       vite.config.ts
       dist\                    — `npm run build` output; PyInstaller bundles THIS, not src\
