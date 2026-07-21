@@ -1,14 +1,20 @@
 """Repo-relative path resolution.
 
-Dev-mode only for now — resolves relative to this file's location on disk.
-The PyInstaller frozen-mode branch (extracted-sibling-folder resolution,
-mirroring PS's $PSScriptRoot fallback) lands with app.py/packaging, out of
-scope for the backend-only cut.
+Dev mode resolves relative to this file's location on disk. Frozen mode
+(PyInstaller onefile, §8) resolves to the exe's own folder instead — the
+`.ps1` engine folders (shared/, changes/, FPSOptimization/, StartupOptimization/)
+ship as real sibling files next to the exe, not embedded in the bundle,
+since `subprocess` needs actual paths on disk to hand to pwsh/powershell.
+Mirrors PS's `$PSScriptRoot` fallback.
 """
 
+import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+if getattr(sys, "frozen", False):
+    REPO_ROOT = Path(sys.executable).resolve().parent
+else:
+    REPO_ROOT = Path(__file__).resolve().parents[2]
 SHARED_DIR = REPO_ROOT / "shared"
 CHANGES_DIR = REPO_ROOT / "changes"
 

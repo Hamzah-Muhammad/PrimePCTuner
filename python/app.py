@@ -16,10 +16,21 @@ from pathlib import Path
 
 import uvicorn
 
+from backend import paths
 from backend.main import app as fastapi_app
 
-REPO_ROOT = Path(__file__).resolve().parent
-FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
+# Sibling-of-exe when frozen (matches backend.paths' REPO_ROOT — the .ps1
+# engine folders live here), this file's own folder in dev mode.
+REPO_ROOT = paths.REPO_ROOT
+
+if getattr(sys, "frozen", False):
+    # frontend/dist is embedded in the onefile bundle (§8's "PyInstaller can
+    # embed frontend/dist/ inside the exe itself, extracted to _MEIPASS at
+    # runtime" — unlike the .ps1 folders, nothing external reads these files
+    # by path, so bundling is safe here).
+    FRONTEND_DIST = Path(sys._MEIPASS) / "frontend_dist"
+else:
+    FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
 
 
 def is_admin() -> bool:
@@ -31,12 +42,25 @@ def is_admin() -> bool:
 
 def relaunch_elevated() -> bool:
     """Mirrors PS's Invoke-PrimeBootstrap elevation step (§3.5). Returns True
-    if a relaunch was fired (caller should exit immediately after)."""
-    params = " ".join(f'"{a}"' for a in sys.argv)
+    if a relaunch was fired (caller should exit immediately after).
+
+    Frozen (PyInstaller onefile): the exe itself is the target, no script
+    path needed. Dev mode: python.exe is the target and the script path has
+    to be threaded through as the first parameter. `sys.argv[1:]` (not
+    `sys.argv`) — argv[0] is the running script/exe's own path, already
+    covered by `target`/`__file__`; re-including it as a parameter would
+    hand app.py a stray positional it doesn't define and argparse would
+    reject the relaunch outright.
+    """
+    extra_args = [f'"{a}"' for a in sys.argv[1:]]
+    if getattr(sys, "frozen", False):
+        target = sys.executable
+        params = " ".join(extra_args)
+    else:
+        target = sys.executable
+        params = " ".join([f'"{__file__}"', *extra_args])
     try:
-        result = ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", sys.executable, f'"{__file__}" {params}', str(REPO_ROOT), 1
-        )
+        result = ctypes.windll.shell32.ShellExecuteW(None, "runas", target, params, str(REPO_ROOT), 1)
         # ShellExecuteW returns a value > 32 on success.
         return result > 32
     except Exception:

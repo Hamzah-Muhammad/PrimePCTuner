@@ -89,6 +89,10 @@ export interface HealthResponse {
   ps_host_error: string | null;
 }
 
+export interface VersionResponse {
+  version: string;
+}
+
 class ApiError extends Error {
   status: number;
   detail: string;
@@ -114,6 +118,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<HealthResponse>("/api/health"),
+  version: () => request<VersionResponse>("/api/version"),
   tools: () => request<ToolsResponse>("/api/tools"),
   catalog: (tool: ToolKey) => request<CatalogItem[]>(`/api/${tool}/catalog`),
   scan: (tool: ToolKey, checked: string[]) =>

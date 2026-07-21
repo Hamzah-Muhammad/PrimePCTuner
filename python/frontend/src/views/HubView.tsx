@@ -10,6 +10,7 @@ interface HubViewProps {
   data: ToolsResponse | null;
   error: string | null;
   healthWarning: string | null;
+  version: string | null;
   onLaunch: (tool: ToolKey) => void;
 }
 
@@ -18,6 +19,7 @@ export function HubView({
   data,
   error,
   healthWarning,
+  version,
   onLaunch,
 }: HubViewProps) {
   return (
@@ -53,7 +55,7 @@ export function HubView({
         </>
       )}
 
-      <Footer note="PrimePCTuner hub v0.1" />
+      <Footer note={version ? `PrimePCTuner hub v${version}` : "PrimePCTuner hub"} />
     </div>
   );
 }
