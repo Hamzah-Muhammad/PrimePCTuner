@@ -22,7 +22,7 @@ export function ChecklistRow({
 }: ChecklistRowProps) {
   const status: PillStatus = scanning
     ? "SCANNING"
-    : (result?.Status ?? "SCANNING");
+    : (result?.Status ?? "IDLE");
   const detail = scanning ? undefined : result?.Current;
 
   return (

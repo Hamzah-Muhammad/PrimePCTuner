@@ -14,6 +14,8 @@ function App() {
   const [toolsError, setToolsError] = useState<string | null>(null);
   const [healthWarning, setHealthWarning] = useState<string | null>(null);
   const [version, setVersion] = useState<string | null>(null);
+  const [scanningPc, setScanningPc] = useState(false);
+  const [scanPcError, setScanPcError] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -30,6 +32,19 @@ function App() {
       .catch(() => {});
   }, []);
 
+  const scanPc = async () => {
+    setScanningPc(true);
+    setScanPcError(null);
+    try {
+      const inventory = await api.scanPc();
+      setToolsData((prev) => (prev ? { ...prev, specs: inventory.Specs } : prev));
+    } catch (e) {
+      setScanPcError(e instanceof Error ? e.message : "scan failed");
+    } finally {
+      setScanningPc(false);
+    }
+  };
+
   return (
     <>
       <BackgroundGlows />
@@ -40,6 +55,9 @@ function App() {
           healthWarning={healthWarning}
           version={version}
           onLaunch={(toolKey) => setView({ name: "tool", toolKey })}
+          onScanPc={scanPc}
+          scanningPc={scanningPc}
+          scanPcError={scanPcError}
         />
       ) : (
         <ToolView

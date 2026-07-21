@@ -32,17 +32,24 @@ def _counts(results: list[ScanResult]) -> dict[str, int]:
     return counts
 
 
-def write_scan_report(tool_key: str, specs: PCSpecs, results: list[ScanResult]) -> Path:
+def write_scan_report(tool_key: str, specs: PCSpecs | None, results: list[ScanResult]) -> Path:
     log_dir = paths.logs_dir(tool_key)
     log_dir.mkdir(parents=True, exist_ok=True)
     ts = _timestamp()
     counts = _counts(results)
     title = REPORT_TITLES[tool_key]
 
+    # specs is None whenever a catalog scan runs without Scan PC having been
+    # pressed first — the two are independent, button-triggered scans (no
+    # scan of any kind runs automatically), so this is a normal case, not an
+    # error.
+    system_line = f"**System:** {specs.CPU} · {specs.GPU} · {specs.RAM} · {specs.OS}" if specs else (
+        "**System:** not scanned — press Scan PC on the hub for system info in this report."
+    )
     lines = [
         f"# {title} — {datetime.now().strftime('%Y-%m-%d %H:%M')}",
         "",
-        f"**System:** {specs.CPU} · {specs.GPU} · {specs.RAM} · {specs.OS}",
+        system_line,
         f"**Result:** {counts['applied']} applied · {counts['pending']} pending · "
         f"{counts['review']} review · {counts['skipped']} skipped · {counts['errors']} errors. "
         "Nothing was changed.",

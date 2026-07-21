@@ -26,10 +26,18 @@ def test_version_matches_single_source_of_truth(client):
     assert client.get("/api/version").json() == {"version": __version__}
 
 
-def test_get_tools_returns_specs_and_tools(client):
+def test_get_tools_returns_no_specs_before_any_scan(client):
+    # No scan of any kind runs automatically at startup (user directive) —
+    # specs stay null until /api/scan-pc is explicitly triggered.
+    body = client.get("/api/tools").json()
+    assert body["specs"] is None
+    assert {t["Key"] for t in body["tools"]} == {"fps", "startup"}
+
+
+def test_scan_pc_populates_tools_specs(client):
+    client.post("/api/scan-pc")
     body = client.get("/api/tools").json()
     assert body["specs"]["CPU"] == "Fake CPU"
-    assert {t["Key"] for t in body["tools"]} == {"fps", "startup"}
 
 
 def test_get_catalog_unknown_tool_404(client):

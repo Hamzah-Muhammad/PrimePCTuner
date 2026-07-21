@@ -69,7 +69,7 @@ export function ToolView({ tool, specs, onBack }: ToolViewProps) {
   const [results, setResults] = useState<Map<string, ScanResult>>(new Map());
   const [counts, setCounts] = useState<ScanCounts | null>(null);
   const [reportAvailable, setReportAvailable] = useState(false);
-  const [statusText, setStatusText] = useState("Scanning…");
+  const [statusText, setStatusText] = useState("Not scanned yet — press Scan to check");
 
   const runScan = useCallback(
     async (ids: string[]) => {
@@ -111,16 +111,16 @@ export function ToolView({ tool, specs, onBack }: ToolViewProps) {
   );
 
   useEffect(() => {
-    // Guard against StrictMode's dev-mode double-invoke (mount → cleanup →
-    // mount): without this, two concurrent POST /scan calls fire and the
-    // backend's per-tool lock correctly 409s the second one. A stale
-    // effect's own catalog fetch is harmless (read-only GET) — what matters
-    // is never triggering runScan from a cancelled run.
+    // No auto-scan on load — the catalog renders with every row IDLE
+    // ("not scanned") until the user presses Scan. Cancellation guard is
+    // still needed for StrictMode's dev-mode double-invoke (mount →
+    // cleanup → mount), since the catalog fetch itself is async.
     let cancelled = false;
     setCatalog(null);
     setResults(new Map());
     setCounts(null);
     setReportAvailable(false);
+    setStatusText("Not scanned yet — press Scan to check");
     api
       .catalog(tool)
       .then((items) => {
@@ -128,7 +128,6 @@ export function ToolView({ tool, specs, onBack }: ToolViewProps) {
         setCatalog(items);
         const defaultChecked = new Set(items.filter((i) => i.DefaultChecked).map((i) => i.Id));
         setChecked(defaultChecked);
-        void runScan([...defaultChecked]);
       })
       .catch((e) => {
         if (!cancelled) setLoadError(e.message ?? "failed to load catalog");
@@ -136,7 +135,6 @@ export function ToolView({ tool, specs, onBack }: ToolViewProps) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool]);
 
   const toggle = (id: string, isChecked: boolean) => {
@@ -208,6 +206,7 @@ export function ToolView({ tool, specs, onBack }: ToolViewProps) {
             statusText={statusText}
             onRescan={() => runScan([...checked])}
             scanning={scanning}
+            hasScanned={counts !== null}
           />
         </div>
       )}
