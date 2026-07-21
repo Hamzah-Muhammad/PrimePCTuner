@@ -10,9 +10,12 @@ interface ToolbarBarProps {
   statusText: string;
   onRescan: () => void;
   scanning: boolean;
+  hasScanned: boolean;
 }
 
-/** Ports the bottom DockPanel toolbar (Grid.Row=4) from New-PrimeChecklistApp. */
+/** Ports the bottom DockPanel toolbar (Grid.Row=4) from New-PrimeChecklistApp.
+ * No scan runs automatically (user directive) — this button is the only
+ * trigger, first scan and every one after. */
 export function ToolbarBar({
   onSelectAll,
   onSelectNone,
@@ -22,6 +25,7 @@ export function ToolbarBar({
   statusText,
   onRescan,
   scanning,
+  hasScanned,
 }: ToolbarBarProps) {
   return (
     <div className="bar">
@@ -36,7 +40,7 @@ export function ToolbarBar({
       <div className="right">
         <span className="status">{statusText}</span>
         <Button variant="primary" onClick={onRescan} disabled={scanning}>
-          Re-scan
+          {hasScanned ? "Re-scan" : "Scan"}
         </Button>
       </div>
     </div>

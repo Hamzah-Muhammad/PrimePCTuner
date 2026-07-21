@@ -51,17 +51,20 @@ async def lifespan(app: FastAPI):
     app.state.ps_host_error: str | None = None
     app.state.pc_specs: PCSpecs | None = None
 
+    # Only resolve the PS host here (shutil.which — instant, no subprocess).
+    # No scan of any kind runs until the user presses a Scan button: not the
+    # PC-specs/system scan, not a tool's catalog scan. Startup used to run
+    # the full system scan synchronously, which blocked uvicorn from
+    # accepting connections for as long as that scan took (installed-software
+    # enumeration especially) — the webview window would sit unresponsive
+    # with nothing to show for it in the meantime.
     try:
         ps_bridge.resolve_ps_exe()
-        scan = ps_bridge.run_system_scan()
-        app.state.pc_specs = PCSpecs(**scan["Specs"])
     except ps_bridge.PSHostNotFoundError as e:
         # Don't crash the process — the frontend needs the app alive to show
         # a startup-health banner for this, same posture as the WPF hub's
         # MessageBox for the same condition (§5.5).
         app.state.ps_host_error = str(e)
-    except ps_bridge.PSBridgeError as e:
-        app.state.ps_host_error = e.message
 
     yield
 
@@ -190,6 +193,7 @@ def post_scan_pc():
     scan = ps_bridge.run_system_scan()
     inventory = SystemInventory(**scan)
     app.state.system_scan = inventory
+    app.state.pc_specs = inventory.Specs
     return inventory
 
 

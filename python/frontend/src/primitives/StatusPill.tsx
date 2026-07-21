@@ -1,12 +1,18 @@
 import "./StatusPill.css";
 
 export type PillStatus =
-  "SCANNING" | "APPLIED" | "PENDING" | "REVIEW" | "SKIPPED" | "ERROR";
+  "IDLE" | "SCANNING" | "APPLIED" | "PENDING" | "REVIEW" | "SKIPPED" | "ERROR";
 
 const STYLES: Record<
   PillStatus,
   { text: string; fg: string; border: string; bg: string }
 > = {
+  IDLE: {
+    text: "NOT SCANNED",
+    fg: "var(--muted)",
+    border: "var(--border)",
+    bg: "var(--pill-bg)",
+  },
   SCANNING: {
     text: "… SCANNING",
     fg: "var(--muted)",
