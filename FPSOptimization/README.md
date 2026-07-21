@@ -2,15 +2,11 @@
 
 The gaming-FPS tool of the [PrimePCTuner](../README.md) suite. Detects your PC's specs, lists **52 FPS-related changes as checkboxes** (all pre-checked), and lets you uncheck anything before pressing Start. Covers telemetry and background-contention elimination, service debloat, NIC power saving, filesystem tuning, and the aggressive security trade-offs (Spectre mitigations, VBS, Defender scheduling).
 
-> **Status: v0.3 — DRY-RUN.** The tool auto-scans on launch and re-scans on **Start dry run**, reporting current state vs target for every checked item and saving a Markdown + JSON report to `logs\` — **nothing is changed yet**. The apply engine (with undo JSON + restore point) is v2. As of v0.3 the UI lives in the suite's shared framework (`..\shared\PrimeUI.ps1`); this folder holds the catalog and a thin launcher.
+> **Status: DRY-RUN.** The tool auto-scans on launch and re-scans on **Re-scan**, reporting current state vs target for every checked item and saving a Markdown + JSON report to `logs\` — **nothing is changed yet**. The apply engine (backend-ready: undo JSON + restore point) isn't wired into the UI yet. This folder holds the catalog (`manifest.json` + `..\changes\`); the UI lives in `..\python\`.
 
 ## Run it
 
-```powershell
-.\Start-FPSOptimization.ps1        # self-elevates via UAC
-```
-
-Or launch it from the suite hub, `..\PrimePCTuner.ps1`. The window shows:
+Launch the suite app — see the root [README](../README.md#start-here-the-app). The window shows:
 - **Specs bar** — CPU, GPU, RAM, OS build, disks, active NIC, elevation state
 - **Checklist** — grouped by level and module, every item with its id, description, and target state
 - **Buttons** — Select all / Select none / Uncheck Level 3 / Start dry run / Open last report
@@ -35,13 +31,10 @@ FPSOptimization owns changes that affect **frame rate and frame-time consistency
 
 | File | Role |
 |---|---|
-| `Start-FPSOptimization.ps1` | Thin launcher: dot-sources `..\shared\PrimeUI.ps1` (theme, specs detection, checklist window, dry-run engine), loads `manifest.json`, then wires titles/levels |
-| `manifest.json` | The 52 items' metadata (id/level/module/name/desc/target/default-checked/script path) — read directly, no subprocess needed just to render the checklist |
+| `manifest.json` | The 52 items' metadata (id/level/module/name/desc/target/default-checked/script path) — read directly by the Python backend, no subprocess needed just to render the checklist |
 | `..\changes\*\*.ps1` | The actual 52 check/apply/undo scripts, one per item, organized by sector (`Windows Changes`, `Services`, `Performance & Hardware`) — each is invoked as its own subprocess via `..\shared\PrimeHeadless.ps1`'s `-Check`/`-Apply`/`-Undo -Json` contract |
 | `CHANGES.md` | Human-readable catalog: what / why / exact implementation / revert per item |
 | `logs\` | Generated dry-run reports (`DryRun_<timestamp>.md` + `.json`), git-ignored |
-
-`-SelfTest` flag builds the window headless and exits — used for sanity checks.
 
 ## Honest expectations
 

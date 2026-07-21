@@ -5,8 +5,7 @@
 # Python host (or a human running a script directly) is already elevated,
 # and child processes inherit that token (§3.5). A change script that needs
 # nothing more than "run this check/apply/undo and print JSON" doesn't need
-# any of the ceremony shared\PrimeUI.ps1's Invoke-PrimeBootstrap does for
-# the WPF app.
+# any elevation ceremony of its own — that's app.py's job.
 #
 # Calling convention (every changes\<Sector>\*.ps1 file follows this shape):
 #   param([switch]$Check, [switch]$Apply, [switch]$Undo, [string]$PreviousValueJson)

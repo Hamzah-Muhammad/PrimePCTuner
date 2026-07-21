@@ -218,9 +218,9 @@ function Test-GameRunningTracked {
     }
 }
 
-# ---------- NIC (also lives in shared\PrimeUI.ps1 for the WPF app;
-# duplicated here — a handful of lines — so individual change scripts never
-# need to dot-source PrimeUI.ps1 / risk pulling in anything WPF-related) ----------
+# ---------- NIC (also duplicated in shared\Invoke-SystemScan.ps1 — a
+# handful of lines — so each caller stays self-contained rather than
+# dot-sourcing a shared helper file just for this) ----------
 
 function Get-ActiveNic {
     Get-NetAdapter -Physical -ErrorAction SilentlyContinue |

@@ -19,9 +19,9 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 $ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent ([Diagnostics.Process]::GetCurrentProcess().MainModule.FileName) }
 . (Join-Path $ScriptDir 'PrimeChecks.ps1')
 
-# ---------- PC specs (same fields as shared\PrimeUI.ps1's Get-PCSpecs; kept
-# self-contained here so this script never dot-sources PrimeUI.ps1, which is
-# the WPF app's own file and shouldn't be a dependency of a headless tool) ----------
+# ---------- PC specs (kept self-contained here rather than dot-sourcing a
+# shared helper file, so this stays a standalone, independently-invokable
+# script) ----------
 function Get-ScanPCSpecs {
     $cpu  = Get-CimInstance Win32_Processor | Select-Object -First 1
     $gpu  = Get-CimInstance Win32_VideoController |
