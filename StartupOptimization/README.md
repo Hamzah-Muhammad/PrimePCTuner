@@ -9,15 +9,18 @@
 
 ## How it differs from FPSOptimization
 
-The FPS catalog is a **static, verified baseline** (the same 52 checks on every PC). This tool's catalog is **built dynamically at launch** — it enumerates whatever is actually set to start on *this* PC, so the checklist is different on every machine. That's what makes it fit general clients.
+The FPS catalog is a **static, verified baseline** (the same 52 checks on every PC). This tool's checklist is a mix:
+
+- **STARTUP APPS** and **LOGON TASKS** are **discovered live at launch** — `..\changes\PC Startup\Enumerate.ps1` enumerates whatever is actually set to start on *this* PC, so those two groups differ on every machine.
+- **WINDOWS EXTRAS** turned out to be mostly static, not PC-specific — several of its items (Copilot, `aimgr`, Widgets package/policy, Edge background boost) are the *exact same* checks FPS Optimizer already has, so they come from `manifest.json` and share the canonical script under `..\changes\Windows Changes\` rather than being duplicated.
 
 ## What it scans (3 groups)
 
-| Group | Surface | Behavior |
-|---|---|---|
-| **STARTUP APPS** | Registry Run/RunOnce entries (HKCU, HKLM, Wow6432Node) + Startup folder shortcuts (user + common) | One checkbox per entry, with its target command shown. Known keeps come annotated and **unchecked** by default |
-| **LOGON TASKS** | Logon/boot-triggered scheduled tasks: root-path tasks, Office logon tasks (re-enabled by every Office update), Edge/Google updater tasks | Disabled tasks show green ✓ APPLIED; running/ready logon tasks show PENDING. System tasks under `\Microsoft\Windows\*` are never listed |
-| **WINDOWS EXTRAS** | The self-starting Windows bloat: Widgets apps + news-feed policy, Copilot, Microsoft AI Manager (`aimgr`), Edge startup boost / background mode, orphaned StartupApproved leftovers | Same checkbox model; each item explains what it removes |
+| Group | Surface | Source | Behavior |
+|---|---|---|---|
+| **STARTUP APPS** | Registry Run/RunOnce entries (HKCU, HKLM, Wow6432Node) + Startup folder shortcuts (user + common) | `Enumerate.ps1`, live | One checkbox per entry, with its target command shown. Known keeps come annotated and **unchecked** by default |
+| **LOGON TASKS** | Logon/boot-triggered scheduled tasks: root-path tasks, Office logon tasks (re-enabled by every Office update), Edge/Google updater tasks | `Enumerate.ps1`, live | Disabled tasks show green ✓ APPLIED; running/ready logon tasks show PENDING. System tasks under `\Microsoft\Windows\*` are never listed |
+| **WINDOWS EXTRAS** | The self-starting Windows bloat: Widgets apps + news-feed policy, Copilot, Microsoft AI Manager (`aimgr`), Edge startup boost / background mode, orphaned StartupApproved leftovers | `manifest.json`, static (7 items, shared with FPS Optimizer where identical) | Same checkbox model; each item explains what it removes |
 
 ## Keep-list annotations
 

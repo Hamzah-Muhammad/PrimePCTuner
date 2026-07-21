@@ -34,23 +34,36 @@ More tools may join the suite (candidates: NetworkOptimization for latency tunin
 PrimePCTuner/
 ├── README.md                  ← you are here
 ├── PrimePCTuner.ps1            ← the hub: specs + pick a tool
+├── docs/
+│   └── PYTHON_REWRITE_DESIGN.md  ← full design doc for the in-progress Python/React rewrite (v2)
 ├── shared/
-│   └── PrimeUI.ps1            ← shared WPF framework: theme, spec detection,
-│                                 checklist window builder, dry-run scan engine
-├── FPSOptimization/           ← v0.3: dry-run GUI + 52-item change catalog
+│   ├── PrimeUI.ps1            ← WPF framework: theme, spec detection, checklist window
+│   ├── PrimeChecks.ps1        ← I/O primitives shared by every change script (registry, service,
+│   │                             scheduled task, fsutil, power scheme, game-detection, tracked undo)
+│   ├── PrimeHeadless.ps1      ← mode-dispatch harness (-Check/-Apply/-Undo -Json) every change
+│   │                             script calls into
+│   ├── Invoke-SystemScan.ps1  ← "Scan PC" broad inventory (specs + installed software + processes)
+│   └── cache\                  (generated, git-ignored)
+├── changes/                   ← every individual check/change, one script per item, by sector
+│   ├── Windows Changes\        (21 scripts)
+│   ├── Services\                (19 scripts)
+│   ├── Performance & Hardware\  (13 scripts)
+│   └── PC Startup\              (Enumerate.ps1 + 3 parameterized action scripts — dynamic sector)
+├── FPSOptimization/           ← v0.3: dry-run GUI, 52-item catalog
 │   ├── README.md
 │   ├── CHANGES.md             ← every change: what / why / exact command / revert
 │   ├── Start-FPSOptimization.ps1
-│   ├── lib\Catalog.ps1        ← static catalog (the verified gaming baseline)
+│   ├── manifest.json          ← metadata for all 52 items, pointing at ..\changes\ scripts
 │   └── logs\                  (generated, git-ignored)
-└── StartupOptimization/       ← v0.1: dry-run GUI, dynamic per-PC catalog
+└── StartupOptimization/       ← v0.1: dry-run GUI, static + live-discovered catalog
     ├── README.md
     ├── Start-StartupOptimization.ps1
-    ├── lib\Catalog.ps1        ← enumerates THIS PC's startup surfaces at launch
+    ├── manifest.json          ← the static items (Windows Extras); dynamic items come from
+    │                             ..\changes\PC Startup\Enumerate.ps1 at launch
     └── logs\                  (generated, git-ignored)
 ```
 
-Both tools are thin shells over `shared\PrimeUI.ps1` — one theme, one checklist window, one scan engine. A tool = its catalog + ~30 lines of wiring.
+Both tools are thin shells over `shared\PrimeUI.ps1` — one theme, one checklist window. Each catalog item is its own standalone script under `changes\`, invoked per-item as a subprocess (via `shared\PrimeHeadless.ps1`'s mode contract) rather than run in-process — isolation over convenience, so one broken/tampered item can only poison its own result. A tool = its `manifest.json` + ~30-60 lines of wiring.
 
 ## Requirements
 

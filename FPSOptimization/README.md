@@ -35,8 +35,9 @@ FPSOptimization owns changes that affect **frame rate and frame-time consistency
 
 | File | Role |
 |---|---|
-| `Start-FPSOptimization.ps1` | Thin launcher: dot-sources `..\shared\PrimeUI.ps1` (theme, specs detection, checklist window, dry-run engine) and this tool's catalog, then wires titles/levels |
-| `lib\Catalog.ps1` | The 52 items as data — each with a read-only `Check` scriptblock. This doubles as the audit engine; v2's apply logic plugs into the same items |
+| `Start-FPSOptimization.ps1` | Thin launcher: dot-sources `..\shared\PrimeUI.ps1` (theme, specs detection, checklist window, dry-run engine), loads `manifest.json`, then wires titles/levels |
+| `manifest.json` | The 52 items' metadata (id/level/module/name/desc/target/default-checked/script path) — read directly, no subprocess needed just to render the checklist |
+| `..\changes\*\*.ps1` | The actual 52 check/apply/undo scripts, one per item, organized by sector (`Windows Changes`, `Services`, `Performance & Hardware`) — each is invoked as its own subprocess via `..\shared\PrimeHeadless.ps1`'s `-Check`/`-Apply`/`-Undo -Json` contract |
 | `CHANGES.md` | Human-readable catalog: what / why / exact implementation / revert per item |
 | `logs\` | Generated dry-run reports (`DryRun_<timestamp>.md` + `.json`), git-ignored |
 
