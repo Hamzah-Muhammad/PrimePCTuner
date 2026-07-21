@@ -111,6 +111,48 @@ def wait_for_server(port: int, timeout_s: float = 35.0) -> bool:
     return False
 
 
+WINDOW_TITLE = "PrimePCTuner by @Humzeeny"
+
+
+def _bring_to_front(_window) -> None:
+    """Runs in a background thread once pywebview's GUI loop is up (§ pattern
+    below). Real, confirmed bug (not speculative): a process that just
+    self-elevated via UAC opens its window successfully — server up, WebView2
+    fully initialized, IsWindowVisible=True — but Windows' foreground-lock
+    protection stops it from stealing focus from whatever was in the
+    foreground before elevation. The window sits behind everything else with
+    no taskbar flash, indistinguishable from "didn't open" unless the user
+    happens to Alt+Tab (confirmed via direct win32 window enumeration during
+    the 2026-07-21 investigation). SetForegroundWindow alone is blocked by
+    the same lock; the toggle-topmost trick bypasses it because z-order
+    changes via SetWindowPos don't require the foreground-lock permission
+    SetForegroundWindow does.
+    """
+    import time
+
+    user32 = ctypes.windll.user32
+    hwnd = 0
+    for _ in range(50):
+        hwnd = user32.FindWindowW(None, WINDOW_TITLE)
+        if hwnd:
+            break
+        time.sleep(0.1)
+    if not hwnd:
+        return
+
+    SW_RESTORE = 9
+    HWND_TOPMOST = -1
+    HWND_NOTOPMOST = -2
+    SWP_NOMOVE = 0x0002
+    SWP_NOSIZE = 0x0001
+    SWP_SHOWWINDOW = 0x0040
+
+    user32.ShowWindow(hwnd, SW_RESTORE)
+    user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+    user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+    user32.SetForegroundWindow(hwnd)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true", help="skip elevation + webview, verify wiring")
@@ -149,15 +191,18 @@ def main() -> None:
 
     import webview
 
-    webview.create_window(
-        "PrimePCTuner by @Humzeeny",
+    window = webview.create_window(
+        WINDOW_TITLE,
         f"http://127.0.0.1:{port}/",
         width=1180,
         height=840,
         min_size=(920, 600),
         background_color="#09090E",
     )
-    webview.start()
+    # func runs in a background thread once the GUI loop is live (pywebview's
+    # documented pattern for post-creation work) — _bring_to_front needs the
+    # window already shown before FindWindowW can locate its hwnd.
+    webview.start(_bring_to_front, (window,))
 
 
 if __name__ == "__main__":
