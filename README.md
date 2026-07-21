@@ -1,21 +1,25 @@
 # PrimePCTuner
 
-A suite of PowerShell optimization tools for Windows 11 PCs. Each tool is its own app in its own folder, but they all share the same DNA: **audit first, checkbox consent for every single change, undo logging, and hard guardrails** — derived from a real, verified optimization pass on a Ryzen 7 5800X3D + RTX 4070 Ti rig that took Warzone from ~100 to ~200 FPS.
+A Windows 11 PC-optimization suite: audit first, checkbox consent for every single change, undo logging, and hard guardrails — derived from a real, verified optimization pass on a Ryzen 7 5800X3D + RTX 4070 Ti rig that took Warzone from ~100 to ~200 FPS.
 
-## Start here: the hub
+## Start here: the app
+
+A pywebview desktop app (FastAPI backend + React frontend, `python/`) is the suite's front door — it detects and displays your PC's specs, then lets you launch whichever tool fits the machine. Every tool opens as the same branded checklist — auto-scanned against your system, green ✓ APPLIED for what's already done, a checkbox per change.
 
 ```powershell
-.\PrimePCTuner.ps1
+python\dist\PrimePCTuner.exe        # packaged build (needs shared\/changes\/FPSOptimization\/StartupOptimization\ as sibling folders)
+# or, for development:
+cd python && .venv\Scripts\python.exe app.py
 ```
 
-**PrimePCTuner** is the suite's main page: it detects and displays your PC's specs, then lets you launch whichever tool fits the machine. Every tool opens as the same branded checklist — auto-scanned against your system, green ✓ APPLIED for what's already done, a checkbox per change.
+Packaging spec: `python/PrimePCTuner.spec` (PyInstaller onefile). Full architecture: `docs/PYTHON_REWRITE_DESIGN.md`.
 
 ## The tools
 
 | Tool | Status | Audience | What it does |
 |---|---|---|---|
-| **[FPSOptimization](FPSOptimization/)** | **v0.3 — dry-run GUI** | Gaming rigs | All gaming-related FPS changes: telemetry/background-contention elimination, service debloat, NIC power saving, filesystem tuning, and the aggressive security trade-offs (mitigations, VBS, Defender scheduling). 52 catalog items across 3 risk levels |
-| **[StartupOptimization](StartupOptimization/)** | **v0.1 — dry-run GUI** | Everyday PCs | The toned-down cleaner: dynamically enumerates every Run-key entry, startup-folder shortcut, logon scheduled task, and Windows extra (Widgets, Copilot, Edge preload) that launches itself at logon on *this* PC. Known keeps (security tray, fan/hardware control) start unchecked |
+| **[FPSOptimization](FPSOptimization/)** | **dry-run, 52-item catalog** | Gaming rigs | All gaming-related FPS changes: telemetry/background-contention elimination, service debloat, NIC power saving, filesystem tuning, and the aggressive security trade-offs (mitigations, VBS, Defender scheduling). 52 catalog items across 3 risk levels |
+| **[StartupOptimization](StartupOptimization/)** | **dry-run, dynamic catalog** | Everyday PCs | The toned-down cleaner: dynamically enumerates every Run-key entry, startup-folder shortcut, logon scheduled task, and Windows extra (Widgets, Copilot, Edge preload) that launches itself at logon on *this* PC. Known keeps (security tray, fan/hardware control) start unchecked |
 
 More tools may join the suite (candidates: NetworkOptimization for latency tuning, MaintenanceService for the repeatable cleanups).
 
@@ -33,11 +37,9 @@ More tools may join the suite (candidates: NetworkOptimization for latency tunin
 ```
 PrimePCTuner/
 ├── README.md                  ← you are here
-├── PrimePCTuner.ps1            ← the hub: specs + pick a tool
 ├── docs/
-│   └── PYTHON_REWRITE_DESIGN.md  ← full design doc for the in-progress Python/React rewrite (v2)
+│   └── PYTHON_REWRITE_DESIGN.md  ← full architecture/design doc for the Python/React app
 ├── shared/
-│   ├── PrimeUI.ps1            ← WPF framework: theme, spec detection, checklist window
 │   ├── PrimeChecks.ps1        ← I/O primitives shared by every change script (registry, service,
 │   │                             scheduled task, fsutil, power scheme, game-detection, tracked undo)
 │   ├── PrimeHeadless.ps1      ← mode-dispatch harness (-Check/-Apply/-Undo -Json) every change
@@ -49,25 +51,28 @@ PrimePCTuner/
 │   ├── Services\                (19 scripts)
 │   ├── Performance & Hardware\  (13 scripts)
 │   └── PC Startup\              (Enumerate.ps1 + 3 parameterized action scripts — dynamic sector)
-├── FPSOptimization/           ← v0.3: dry-run GUI, 52-item catalog
+├── FPSOptimization/            52-item catalog
 │   ├── README.md
 │   ├── CHANGES.md             ← every change: what / why / exact command / revert
-│   ├── Start-FPSOptimization.ps1
 │   ├── manifest.json          ← metadata for all 52 items, pointing at ..\changes\ scripts
 │   └── logs\                  (generated, git-ignored)
-└── StartupOptimization/       ← v0.1: dry-run GUI, static + live-discovered catalog
-    ├── README.md
-    ├── Start-StartupOptimization.ps1
-    ├── manifest.json          ← the static items (Windows Extras); dynamic items come from
-    │                             ..\changes\PC Startup\Enumerate.ps1 at launch
-    └── logs\                  (generated, git-ignored)
+├── StartupOptimization/        static + live-discovered catalog
+│   ├── README.md
+│   ├── manifest.json          ← the static items (Windows Extras); dynamic items come from
+│   │                             ..\changes\PC Startup\Enumerate.ps1 at launch
+│   └── logs\                  (generated, git-ignored)
+└── python/                    ← the app: FastAPI backend + React frontend + pywebview launcher
+    ├── app.py                  ← desktop entry point (elevation, server, window)
+    ├── backend/                ← routes, subprocess bridge to changes\*.ps1, models, reports
+    ├── frontend/                ← React SPA (Vite), built to frontend\dist\
+    └── PrimePCTuner.spec        ← PyInstaller onefile packaging spec
 ```
 
-Both tools are thin shells over `shared\PrimeUI.ps1` — one theme, one checklist window. Each catalog item is its own standalone script under `changes\`, invoked per-item as a subprocess (via `shared\PrimeHeadless.ps1`'s mode contract) rather than run in-process — isolation over convenience, so one broken/tampered item can only poison its own result. A tool = its `manifest.json` + ~30-60 lines of wiring.
+Each catalog item is its own standalone PowerShell script under `changes\`, invoked per-item as a subprocess from the Python backend (via `shared\PrimeHeadless.ps1`'s mode contract) rather than run in-process — isolation over convenience, so one broken/tampered item can only poison its own result. A tool = its `manifest.json` + the shared FastAPI/React app wiring.
 
 ## Requirements
 
-Windows 11, PowerShell 5.1+ (7+ recommended), Administrator elevation (tools self-elevate), and a willingness to reboot for some changes.
+Windows 11, WebView2 (preinstalled on Win11), PowerShell 5.1+ (7+ recommended), Administrator elevation (the app self-elevates), and a willingness to reboot for some changes. Building from source additionally needs Python 3.13 + Node/npm (build-time only — the packaged exe never runs Node).
 
 ## License / disclaimer
 

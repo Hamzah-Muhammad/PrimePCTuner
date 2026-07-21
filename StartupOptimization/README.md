@@ -1,11 +1,8 @@
 # StartupOptimization
 
-**Status: v0.1 — dry-run GUI.** The startup-junk tool of the [PrimePCTuner](../README.md) suite, aimed at **everyday PCs, not gaming rigs** — the toned-down cleaner. Same pattern as FPSOptimization: detect, list every removal as a checkbox, auto-scan on launch, dry-run first.
+**Status: dry-run.** The startup-junk tool of the [PrimePCTuner](../README.md) suite, aimed at **everyday PCs, not gaming rigs** — the toned-down cleaner. Same pattern as FPSOptimization: detect, list every removal as a checkbox, auto-scan on launch, dry-run first.
 
-```powershell
-.\Start-StartupOptimization.ps1            # self-elevates, opens the GUI
-.\Start-StartupOptimization.ps1 -SelfTest  # build the window headless + exit
-```
+Launch the suite app — see the root [README](../README.md#start-here-the-app). This folder holds the catalog (`manifest.json` + live discovery via `..\changes\PC Startup\Enumerate.ps1`); the UI lives in `..\python\`.
 
 ## How it differs from FPSOptimization
 

@@ -1,6 +1,5 @@
 """Load each tool's catalog — static entries from manifest.json, plus
 Startup Optimizer's live-discovered entries from Enumerate.ps1 (§3, §7).
-Mirrors PS's Get-PrimeManifestItems / Start-StartupOptimization.ps1 wiring.
 """
 
 import json
