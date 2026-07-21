@@ -90,6 +90,27 @@ def run_server(port: int) -> None:
     uvicorn.run(fastapi_app, host="127.0.0.1", port=port, log_level="warning")
 
 
+def wait_for_server(port: int, timeout_s: float = 35.0) -> bool:
+    """Polls /api/health until the ASGI server is actually accepting
+    connections. Necessary, not cosmetic: FastAPI's lifespan startup (a real
+    PowerShell system scan — specs + installed software + processes, easily
+    a few seconds) runs BEFORE uvicorn starts serving, so opening the webview
+    window immediately after starting the server thread is a real race —
+    the window loads before anything is listening and WebView2 shows its own
+    "can't reach this page" with no automatic retry."""
+    import time
+    import urllib.request
+
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=1)
+            return True
+        except OSError:
+            time.sleep(0.1)
+    return False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true", help="skip elevation + webview, verify wiring")
@@ -108,19 +129,12 @@ def main() -> None:
     server_thread = threading.Thread(target=run_server, args=(port,), daemon=True)
     server_thread.start()
 
-    if args.self_test:
-        import time
-        import urllib.request
+    if not wait_for_server(port):
+        print("SERVER FAILED TO START — port never came up", file=sys.stderr)
+        sys.exit(1)
 
-        for _ in range(50):
-            try:
-                urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=1)
-                break
-            except OSError:
-                time.sleep(0.1)
-        else:
-            print("SELFTEST FAILED — server never came up", file=sys.stderr)
-            sys.exit(1)
+    if args.self_test:
+        import urllib.request
 
         frontend_ok = False
         if warning is None:
