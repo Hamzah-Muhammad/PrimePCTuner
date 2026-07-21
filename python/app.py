@@ -136,32 +136,43 @@ def wait_for_server(port: int, timeout_s: float = 35.0) -> bool:
 WINDOW_TITLE = "PrimePCTuner by @Humzeeny"
 
 
-def _bring_to_front(_window) -> None:
-    """Runs in a background thread once pywebview's GUI loop is up (§ pattern
-    below). Real, confirmed bug (not speculative): a process that just
-    self-elevated via UAC opens its window successfully — server up, WebView2
-    fully initialized, IsWindowVisible=True — but Windows' foreground-lock
-    protection stops it from stealing focus from whatever was in the
-    foreground before elevation. The window sits behind everything else with
-    no taskbar flash, indistinguishable from "didn't open" unless the user
-    happens to Alt+Tab (confirmed via direct win32 window enumeration during
-    the 2026-07-21 investigation). SetForegroundWindow alone is blocked by
-    the same lock; the toggle-topmost trick bypasses it because z-order
-    changes via SetWindowPos don't require the foreground-lock permission
-    SetForegroundWindow does.
+def _bring_to_front(window) -> None:
+    """Runs in a background thread once pywebview's GUI loop is up (webview.
+    start(func, args)'s documented pattern). Real, confirmed bug (not
+    speculative): a process that just self-elevated via UAC opens its window
+    successfully — server up, WebView2 fully initialized, IsWindowVisible=True
+    — but Windows' foreground-lock protection stops it from stealing focus
+    from whatever was in the foreground before elevation. The window sits
+    behind everything else with no taskbar flash, indistinguishable from
+    "didn't open" unless the user happens to Alt+Tab (confirmed via direct
+    win32 window enumeration during the 2026-07-21 investigation).
+    SetForegroundWindow alone is blocked by the same lock; the toggle-topmost
+    trick bypasses it because z-order changes via SetWindowPos don't require
+    the foreground-lock permission SetForegroundWindow does.
+
+    Gets the HWND from `window.native.Handle` — the same attribute
+    pywebview's own Windows backend (webview/platforms/winforms.py) uses
+    internally for its DPI/DWM/icon calls — not a FindWindowW title lookup.
+    Searching by title would match ANY window with that exact string,
+    including one another process created first; this process is elevated,
+    so calling SetForegroundWindow/SetWindowPos on a window it doesn't
+    actually own on the strength of a string match is a real trust-boundary
+    gap, not just a style nit (flagged by automated review, verified against
+    pywebview's own source before fixing).
     """
     import time
 
-    user32 = ctypes.windll.user32
-    hwnd = 0
+    hwnd = None
     for _ in range(50):
-        hwnd = user32.FindWindowW(None, WINDOW_TITLE)
-        if hwnd:
+        native = getattr(window, "native", None)
+        if native is not None:
+            hwnd = native.Handle.ToInt32()
             break
         time.sleep(0.1)
     if not hwnd:
         return
 
+    user32 = ctypes.windll.user32
     SW_RESTORE = 9
     HWND_TOPMOST = -1
     HWND_NOTOPMOST = -2
