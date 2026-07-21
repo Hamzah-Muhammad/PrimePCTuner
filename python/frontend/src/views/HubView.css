@@ -1,0 +1,33 @@
+.page {
+  position: relative;
+  z-index: 1;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 22px 30px 16px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.specsRow {
+  margin: 0 0 14px;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.loading {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 40px 0;
+}
+
+.error {
+  color: var(--red);
+  font-size: 13px;
+  padding: 40px 0;
+}

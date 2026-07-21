@@ -1,0 +1,58 @@
+.page {
+  position: relative;
+  z-index: 1;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 26px 14px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.back {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.back:hover {
+  color: var(--green);
+}
+
+.metaRow {
+  margin: 0 0 10px;
+}
+
+.statsRow {
+  margin-top: 6px;
+}
+
+.checklistWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.loading,
+.error {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 40px 0;
+}
+
+.error {
+  color: var(--red);
+}

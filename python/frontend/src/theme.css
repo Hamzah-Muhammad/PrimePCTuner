@@ -1,0 +1,120 @@
+/* Design tokens ported 1:1 from shared/PrimeUI.ps1's $P palette — this is a
+   faithful port of the existing WPF app's look, not a new visual direction.
+   "Polish" here means execution quality (motion, focus states, responsive
+   layout), not a different palette or layout. */
+
+:root {
+  --bg: #09090e;
+  --surface: #111116;
+  --surface-alt: #18181f;
+  --border: #242430;
+  --text: #f2f2f7;
+  --muted: #7c7c86;
+  --muted-dim: #55555f;
+  --green: #00c805;
+  --green-hi: #00e808;
+  --gold-a: #ffd60a;
+  --gold-b: #ff9500;
+  --red: #ff453a;
+  --review-fg: #b8b8c4;
+  --pill-bg: #141419;
+
+  --font-ui: "Segoe UI", "Segoe UI Variable", system-ui, sans-serif;
+  --font-mono: "Consolas", "Cascadia Mono", ui-monospace, monospace;
+
+  --radius-sm: 7px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-med: 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-med: 0ms;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--green) 35%, transparent);
+  color: var(--text);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-dim);
+  background-clip: padding-box;
+}
+
+:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button {
+  font-family: inherit;
+}
+
+@keyframes prime-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes prime-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes prime-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

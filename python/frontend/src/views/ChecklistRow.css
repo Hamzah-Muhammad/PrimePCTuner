@@ -1,0 +1,59 @@
+.row {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px 14px;
+  animation: prime-fade-up var(--dur-med) var(--ease) both;
+}
+
+.check {
+  margin-top: 2px;
+  margin-right: 12px;
+}
+
+.idPill {
+  flex-shrink: 0;
+  min-width: 46px;
+  margin-right: 12px;
+  margin-top: 0;
+  text-align: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.texts {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.desc {
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.target {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted-dim);
+  overflow-wrap: anywhere;
+}
+
+.statusCol {
+  flex-shrink: 0;
+  width: 220px;
+  text-align: left;
+}
