@@ -13,6 +13,7 @@ function App() {
   const [toolsData, setToolsData] = useState<ToolsResponse | null>(null);
   const [toolsError, setToolsError] = useState<string | null>(null);
   const [healthWarning, setHealthWarning] = useState<string | null>(null);
+  const [version, setVersion] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -22,6 +23,10 @@ function App() {
     api
       .health()
       .then((h) => setHealthWarning(h.ok ? null : "PowerShell not found"))
+      .catch(() => {});
+    api
+      .version()
+      .then((v) => setVersion(v.version))
       .catch(() => {});
   }, []);
 
@@ -33,6 +38,7 @@ function App() {
           data={toolsData}
           error={toolsError}
           healthWarning={healthWarning}
+          version={version}
           onLaunch={(toolKey) => setView({ name: "tool", toolKey })}
         />
       ) : (

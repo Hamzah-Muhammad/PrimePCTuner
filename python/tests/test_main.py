@@ -20,6 +20,12 @@ def test_health_ok(client):
     assert client.get("/api/health").json() == {"ok": True, "ps_host_error": None}
 
 
+def test_version_matches_single_source_of_truth(client):
+    from backend.__version__ import __version__
+
+    assert client.get("/api/version").json() == {"version": __version__}
+
+
 def test_get_tools_returns_specs_and_tools(client):
     body = client.get("/api/tools").json()
     assert body["specs"]["CPU"] == "Fake CPU"

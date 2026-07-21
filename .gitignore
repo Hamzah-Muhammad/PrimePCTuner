@@ -11,3 +11,8 @@ python/.ruff_cache/
 
 # Frontend (python/frontend/) — dist/ already covered by the root rule above
 python/frontend/node_modules/
+
+# PyInstaller (python/) — build/ intermediates + generated version resource;
+# dist/ already covered by the root rule above
+python/build/
+python/version_info.txt

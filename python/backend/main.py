@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 from . import manifest, ps_bridge, reports
+from .__version__ import __version__
 from .models import (
     ApplyItemResult,
     ApplyRequest,
@@ -81,6 +82,11 @@ def _catalog_by_id(tool: str) -> dict[str, CatalogItem]:
 @app.get("/api/health")
 def health():
     return {"ok": app.state.ps_host_error is None, "ps_host_error": app.state.ps_host_error}
+
+
+@app.get("/api/version")
+def get_version():
+    return {"version": __version__}
 
 
 @app.get("/api/tools")
