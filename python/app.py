@@ -40,6 +40,27 @@ def is_admin() -> bool:
         return False
 
 
+# ShellExecuteW returns HINSTANCE — pointer-sized (64-bit on 64-bit Windows).
+# ctypes' default restype for an unconfigured function is a 32-bit c_long,
+# which would silently truncate that return value if it were ever large.
+# In practice ShellExecuteW's real return values are always small
+# documented codes (checked directly — "open" and "runas" both returned 42
+# under the old, unconfigured restype too), so this wasn't the cause of the
+# "click UAC yes, nothing opens" bug investigated the same day — that
+# remains unresolved. Kept anyway as the objectively more correct way to
+# call a pointer-returning WinAPI function through ctypes.
+_shell_execute_w = ctypes.windll.shell32.ShellExecuteW
+_shell_execute_w.restype = ctypes.c_void_p
+_shell_execute_w.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_wchar_p,
+    ctypes.c_wchar_p,
+    ctypes.c_wchar_p,
+    ctypes.c_wchar_p,
+    ctypes.c_int,
+]
+
+
 def relaunch_elevated() -> bool:
     """Mirrors PS's Invoke-PrimeBootstrap elevation step (§3.5). Returns True
     if a relaunch was fired (caller should exit immediately after).
@@ -60,9 +81,10 @@ def relaunch_elevated() -> bool:
         target = sys.executable
         params = " ".join([f'"{__file__}"', *extra_args])
     try:
-        result = ctypes.windll.shell32.ShellExecuteW(None, "runas", target, params, str(REPO_ROOT), 1)
-        # ShellExecuteW returns a value > 32 on success.
-        return result > 32
+        result = _shell_execute_w(None, "runas", target, params, str(REPO_ROOT), 1)
+        # ShellExecuteW returns a value > 32 on success (result is None or a
+        # real pointer value now that restype is correctly configured above).
+        return bool(result) and result > 32
     except Exception:
         return False
 
