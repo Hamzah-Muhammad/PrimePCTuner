@@ -1,0 +1,46 @@
+.btn {
+  cursor: pointer;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 12px;
+  border: 1px solid transparent;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btnSec {
+  padding: 7px 14px;
+  background: var(--surface-alt);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.btnSec:hover:not(:disabled) {
+  border-color: var(--green);
+}
+
+.btnPri {
+  padding: 9px 22px;
+  background: var(--green);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 13px;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--green) 45%, transparent);
+}
+
+.btnPri:hover:not(:disabled) {
+  background: var(--green-hi);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--green-hi) 55%, transparent);
+}

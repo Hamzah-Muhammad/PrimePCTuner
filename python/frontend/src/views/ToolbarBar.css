@@ -1,0 +1,27 @@
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.left {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.status {
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 420px;
+  text-align: right;
+}

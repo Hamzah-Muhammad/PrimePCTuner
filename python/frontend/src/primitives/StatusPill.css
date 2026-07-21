@@ -1,0 +1,32 @@
+.wrap {
+  margin-left: 14px;
+  min-width: 128px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--pill-bg);
+  padding: 3px 9px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition:
+    border-color var(--dur-med) var(--ease),
+    background var(--dur-med) var(--ease),
+    color var(--dur-med) var(--ease);
+}
+
+.pill.scanning {
+  animation: prime-pulse 1.3s ease-in-out infinite;
+}
+
+.detail {
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}

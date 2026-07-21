@@ -8,3 +8,6 @@ python/**/__pycache__/
 python/**/*.pyc
 python/.pytest_cache/
 python/.ruff_cache/
+
+# Frontend (python/frontend/) — dist/ already covered by the root rule above
+python/frontend/node_modules/

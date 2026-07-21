@@ -1,0 +1,33 @@
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 0;
+  margin-top: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  margin-right: 8px;
+}
+
+.dot {
+  font-size: 10px;
+}
+
+.num {
+  font-weight: 700;
+  color: var(--text);
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.label {
+  color: var(--muted);
+  font-size: 10.5px;
+}

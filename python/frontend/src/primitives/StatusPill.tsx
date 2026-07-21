@@ -1,0 +1,67 @@
+import "./StatusPill.css";
+
+export type PillStatus =
+  "SCANNING" | "APPLIED" | "PENDING" | "REVIEW" | "SKIPPED" | "ERROR";
+
+const STYLES: Record<
+  PillStatus,
+  { text: string; fg: string; border: string; bg: string }
+> = {
+  SCANNING: {
+    text: "… SCANNING",
+    fg: "var(--muted)",
+    border: "var(--border)",
+    bg: "var(--pill-bg)",
+  },
+  APPLIED: {
+    text: "✓ APPLIED",
+    fg: "var(--green-hi)",
+    border: "var(--green)",
+    bg: "color-mix(in srgb, var(--green) 12%, transparent)",
+  },
+  PENDING: {
+    text: "→ PENDING",
+    fg: "var(--gold-a)",
+    border: "var(--gold-b)",
+    bg: "color-mix(in srgb, var(--gold-a) 14%, transparent)",
+  },
+  REVIEW: {
+    text: "◆ REVIEW",
+    fg: "var(--review-fg)",
+    border: "var(--muted)",
+    bg: "var(--pill-bg)",
+  },
+  SKIPPED: {
+    text: "SKIPPED",
+    fg: "var(--muted)",
+    border: "var(--border)",
+    bg: "var(--pill-bg)",
+  },
+  ERROR: {
+    text: "✕ ERROR",
+    fg: "var(--red)",
+    border: "var(--red)",
+    bg: "color-mix(in srgb, var(--red) 12%, transparent)",
+  },
+};
+
+interface StatusPillProps {
+  status: PillStatus;
+  detail?: string;
+}
+
+/** Ports $PillStyles + Set-PrimeRowStatus. */
+export function StatusPill({ status, detail }: StatusPillProps) {
+  const s = STYLES[status];
+  return (
+    <div className="wrap">
+      <span
+        className={"pill" + (status === "SCANNING" ? " scanning" : "")}
+        style={{ color: s.fg, borderColor: s.border, background: s.bg }}
+      >
+        {s.text}
+      </span>
+      {detail && <div className="detail">{detail}</div>}
+    </div>
+  );
+}

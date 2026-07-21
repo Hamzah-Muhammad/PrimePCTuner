@@ -1,0 +1,38 @@
+import "./StatsPanel.css";
+
+export interface ScanCounts {
+  applied: number;
+  pending: number;
+  review: number;
+  skipped: number;
+  errors: number;
+}
+
+const STAT_DEFS: { key: keyof ScanCounts; label: string; color: string }[] = [
+  { key: "applied", label: "APPLIED", color: "var(--green)" },
+  { key: "pending", label: "PENDING", color: "var(--gold-a)" },
+  { key: "review", label: "REVIEW", color: "var(--muted)" },
+  { key: "skipped", label: "SKIPPED", color: "var(--muted)" },
+  { key: "errors", label: "ERRORS", color: "var(--red)" },
+];
+
+interface StatsPanelProps {
+  counts: ScanCounts | null;
+}
+
+/** Ports the scan-stat chip row built inline in New-PrimeChecklistApp. */
+export function StatsPanel({ counts }: StatsPanelProps) {
+  return (
+    <div className="panel">
+      {STAT_DEFS.map((sd) => (
+        <span className="chip" key={sd.key}>
+          <span className="dot" style={{ color: sd.color }}>
+            ●
+          </span>
+          <span className="num">{counts ? counts[sd.key] : "–"}</span>
+          <span className="label">{sd.label}</span>
+        </span>
+      ))}
+    </div>
+  );
+}

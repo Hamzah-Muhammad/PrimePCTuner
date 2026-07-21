@@ -1,0 +1,14 @@
+.card {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  margin: 3px 0;
+  background: linear-gradient(180deg, var(--surface), var(--surface-alt));
+  transition:
+    border-color var(--dur-med) var(--ease),
+    transform var(--dur-med) var(--ease);
+}
+
+.card.interactive:hover {
+  border-color: color-mix(in srgb, var(--green) 45%, var(--border));
+}

@@ -1,0 +1,34 @@
+.glows {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glowTop {
+  position: absolute;
+  top: -420px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1300px;
+  height: 760px;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--green) 18%, transparent) 0%,
+    transparent 70%
+  );
+}
+
+.glowBottom {
+  position: absolute;
+  bottom: -380px;
+  right: -380px;
+  width: 1000px;
+  height: 640px;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--gold-b) 13%, transparent) 0%,
+    transparent 70%
+  );
+}
