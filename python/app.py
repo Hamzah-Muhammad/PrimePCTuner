@@ -9,10 +9,25 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import os
 import socket
 import sys
 import threading
 from pathlib import Path
+
+# PyInstaller's --windowed (console=False) build has no console at all, so
+# sys.stdout/sys.stderr are None rather than a hidden stream — the real root
+# cause of the "UAC yes, then nothing" bug (found 2026-07-22 by comparing
+# against a console=True debug build, which worked): uvicorn's logging setup
+# and app.py's own print(..., file=sys.stderr) calls hit a None stream, and
+# depending on exactly where that happens the server thread can die silently
+# before ever binding the port — no traceback, no dialog, no event log entry,
+# because there's no stream anywhere to write one to. Must run before uvicorn
+# (or anything else that configures logging) is imported.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
 
 import uvicorn
 
