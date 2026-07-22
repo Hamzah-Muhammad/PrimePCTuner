@@ -147,6 +147,15 @@ def test_apply_writes_undo_log_only_for_successful_items(client, monkeypatch, tm
     assert [r["Id"] for r in records] == ["A.1"]
 
 
+def test_undo_available_false_before_any_apply(client):
+    assert client.get("/api/fps/undo/available").json() == {"available": False}
+
+
+def test_undo_available_true_after_apply(client, monkeypatch):
+    monkeypatch.setattr(reports, "latest_undo_log", lambda tool: [{"Id": "A.1"}])
+    assert client.get("/api/fps/undo/available").json() == {"available": True}
+
+
 def test_undo_no_prior_apply_404(client):
     assert client.post("/api/fps/undo").status_code == 404
 

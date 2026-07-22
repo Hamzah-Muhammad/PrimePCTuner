@@ -135,6 +135,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ checked }),
     }),
+  undoAvailable: (tool: ToolKey) =>
+    request<{ available: boolean }>(`/api/${tool}/undo/available`),
   undo: (tool: ToolKey) =>
     request<UndoItemResult[]>(`/api/${tool}/undo`, { method: "POST" }),
   scanPc: () => request<SystemInventory>("/api/scan-pc", { method: "POST" }),

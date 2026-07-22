@@ -172,6 +172,12 @@ def post_apply(tool: str, req: ApplyRequest):
         lock.release()
 
 
+@app.get("/api/{tool}/undo/available")
+def get_undo_available(tool: str):
+    _require_tool(tool)
+    return {"available": reports.latest_undo_log(tool) is not None}
+
+
 @app.post("/api/{tool}/undo", response_model=list[UndoItemResult])
 def post_undo(tool: str):
     _require_tool(tool)
