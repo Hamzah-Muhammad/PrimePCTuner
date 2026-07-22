@@ -1,0 +1,49 @@
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: prime-fade-up var(--dur-med) var(--ease);
+}
+
+.modalCard {
+  width: min(420px, calc(100vw - 48px));
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modalTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.modalMessage {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.modalCallout {
+  font-size: 12px;
+  color: var(--gold-a);
+  background: color-mix(in srgb, var(--gold-a) 12%, transparent);
+  border: 1px solid var(--gold-b);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  line-height: 1.5;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}

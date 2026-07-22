@@ -44,3 +44,17 @@
   background: var(--green-hi);
   box-shadow: 0 0 22px color-mix(in srgb, var(--green-hi) 55%, transparent);
 }
+
+.btnDanger {
+  padding: 9px 22px;
+  background: var(--red);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 13px;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--red) 45%, transparent);
+}
+
+.btnDanger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 85%, white);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--red) 55%, transparent);
+}
