@@ -136,7 +136,7 @@ def wait_for_server(port: int, timeout_s: float = 35.0) -> bool:
 WINDOW_TITLE = "PrimePCTuner by @Humzeeny"
 
 
-def _bring_to_front(window) -> None:
+def _bring_to_front(_window) -> None:
     """Runs in a background thread once pywebview's GUI loop is up (webview.
     start(func, args)'s documented pattern). Real, confirmed bug (not
     speculative): a process that just self-elevated via UAC opens its window
@@ -145,34 +145,37 @@ def _bring_to_front(window) -> None:
     from whatever was in the foreground before elevation. The window sits
     behind everything else with no taskbar flash, indistinguishable from
     "didn't open" unless the user happens to Alt+Tab (confirmed via direct
-    win32 window enumeration during the 2026-07-21 investigation).
-    SetForegroundWindow alone is blocked by the same lock; the toggle-topmost
-    trick bypasses it because z-order changes via SetWindowPos don't require
-    the foreground-lock permission SetForegroundWindow does.
+    win32 window enumeration during the 2026-07-21 investigation, and
+    verified fixed end-to-end by the user on a real UAC-elevated launch).
 
-    Gets the HWND from `window.native.Handle` — the same attribute
-    pywebview's own Windows backend (webview/platforms/winforms.py) uses
-    internally for its DPI/DWM/icon calls — not a FindWindowW title lookup.
-    Searching by title would match ANY window with that exact string,
-    including one another process created first; this process is elevated,
-    so calling SetForegroundWindow/SetWindowPos on a window it doesn't
-    actually own on the strength of a string match is a real trust-boundary
-    gap, not just a style nit (flagged by automated review, verified against
-    pywebview's own source before fixing).
+    Locates the window via FindWindowW(title) rather than `window.native.
+    Handle` — a `.native.Handle`-based version was tried after an automated
+    review flagged the title lookup as a spoofing surface (see git history),
+    but that version produced NO window at all under a real interactive UAC
+    elevation (only verified by the author under an already-elevated test
+    session, which turned out not to reproduce the real failure mode — same
+    lesson as the rest of this investigation). Reverted to the version
+    actually proven to work end-to-end, closing the spoofing gap a different
+    way: verify the found window's owning process is this one before
+    touching it, instead of switching to an unverified retrieval mechanism.
     """
     import time
 
-    hwnd = None
+    user32 = ctypes.windll.user32
+    own_pid = ctypes.windll.kernel32.GetCurrentProcessId()
+
+    hwnd = 0
     for _ in range(50):
-        native = getattr(window, "native", None)
-        if native is not None:
-            hwnd = native.Handle.ToInt32()
-            break
+        candidate = user32.FindWindowW(None, WINDOW_TITLE)
+        if candidate:
+            owner_pid = ctypes.c_ulong()
+            user32.GetWindowThreadProcessId(candidate, ctypes.byref(owner_pid))
+            if owner_pid.value == own_pid:
+                hwnd = candidate
+                break
         time.sleep(0.1)
     if not hwnd:
         return
-
-    user32 = ctypes.windll.user32
     SW_RESTORE = 9
     HWND_TOPMOST = -1
     HWND_NOTOPMOST = -2
