@@ -18,7 +18,7 @@ Packaging spec: `python/PrimePCTuner.spec` (PyInstaller onefile). Full architect
 
 | Tool | Status | Audience | What it does |
 |---|---|---|---|
-| **[FPSOptimization](FPSOptimization/)** | **dry-run, 52-item catalog** | Gaming rigs | All gaming-related FPS changes: telemetry/background-contention elimination, service debloat, NIC power saving, filesystem tuning, and the aggressive security trade-offs (mitigations, VBS, Defender scheduling). 52 catalog items across 3 risk levels |
+| **[FPSOptimization](FPSOptimization/)** | **dry-run, 54-item catalog** | Gaming rigs | All gaming-related FPS changes: telemetry/background-contention elimination, service debloat, NIC power saving, GPU scheduling, filesystem tuning, and the aggressive security trade-offs (mitigations, VBS, Defender scheduling). 54 catalog items across 3 risk levels |
 | **[StartupOptimization](StartupOptimization/)** | **dry-run, dynamic catalog** | Everyday PCs | The toned-down cleaner: dynamically enumerates every Run-key entry, startup-folder shortcut, logon scheduled task, and Windows extra (Widgets, Copilot, Edge preload) that launches itself at logon on *this* PC. Known keeps (security tray, fan/hardware control) start unchecked |
 
 More tools may join the suite (candidates: NetworkOptimization for latency tuning, MaintenanceService for the repeatable cleanups).
@@ -47,14 +47,14 @@ PrimePCTuner/
 │   ├── Invoke-SystemScan.ps1  ← "Scan PC" broad inventory (specs + installed software + processes)
 │   └── cache\                  (generated, git-ignored)
 ├── changes/                   ← every individual check/change, one script per item, by sector
-│   ├── Windows Changes\        (21 scripts)
+│   ├── Windows Changes\        (22 scripts)
 │   ├── Services\                (19 scripts)
-│   ├── Performance & Hardware\  (13 scripts)
+│   ├── Performance & Hardware\  (14 scripts)
 │   └── PC Startup\              (Enumerate.ps1 + 3 parameterized action scripts — dynamic sector)
-├── FPSOptimization/            52-item catalog
+├── FPSOptimization/            54-item catalog
 │   ├── README.md
 │   ├── CHANGES.md             ← every change: what / why / exact command / revert
-│   ├── manifest.json          ← metadata for all 52 items, pointing at ..\changes\ scripts
+│   ├── manifest.json          ← metadata for all 54 items, pointing at ..\changes\ scripts
 │   └── logs\                  (generated, git-ignored)
 ├── StartupOptimization/        static + live-discovered catalog
 │   ├── README.md

@@ -3,7 +3,7 @@ from backend import manifest
 
 def test_load_static_items_fps_matches_real_repo_catalog():
     items = manifest.load_static_items("fps")
-    assert len(items) == 52
+    assert len(items) == 54
     assert all(item.ScriptPath for item in items)
     # Every manifest entry must resolve to a real script on disk — the same
     # integrity check done manually when the manifests were first built.

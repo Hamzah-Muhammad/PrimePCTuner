@@ -30,7 +30,7 @@ TOOL_META = {
         Tag="FOR GAMING RIGS",
         Desc="Deep gaming optimization: telemetry & background-contention elimination, "
         "service debloat, NIC tuning, and aggressive security trade-offs.",
-        Meta="v0.3 · 52 checks · dry run",
+        Meta="v0.3 · 54 checks · dry run",
     ),
     "startup": ToolMeta(
         Key="startup",

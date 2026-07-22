@@ -79,6 +79,10 @@
     "Desc": "Network throttling off + games get a fair CPU share from the multimedia scheduler.",
     "Target": "NetworkThrottlingIndex = 0xFFFFFFFF, SystemResponsiveness = 0 (10 also accepted)", "DefaultChecked": true,
     "Script": "changes/Performance & Hardware/1.19_MmcssGamingProfile.ps1" },
+  { "Id": "1.20", "Level": 1, "Module": "Graphics", "Name": "Hardware-accelerated GPU Scheduling on",
+    "Desc": "Offloads scheduling to the GPU instead of Windows — recommended for modern GPUs/drivers. Takes effect after reboot.",
+    "Target": "HwSchMode = 2", "DefaultChecked": true,
+    "Script": "changes/Performance & Hardware/1.20_HardwareGpuScheduling-On.ps1" },
 
   { "Id": "2S.1", "Level": 2, "Module": "Services", "Name": "DiagTrack → Disabled",
     "Desc": "Connected User Experiences & Telemetry — the main telemetry collector.",
@@ -173,6 +177,10 @@
     "Desc": "Lists known OEM utility leftovers; never auto-removes — each is a per-item prompt at apply-time.",
     "Target": "no known OEM bloat packages", "DefaultChecked": true,
     "Script": "changes/Windows Changes/2A.4_OemBloatSweep-ReportOnly.ps1" },
+  { "Id": "2R.1", "Level": 2, "Module": "Services", "Name": "NVIDIA container services (report-only)",
+    "Desc": "NvContainerLocalSystem/NVDisplay.ContainerLocalSystem host real driver-settings functionality, not just telemetry — never auto-disabled, informational only.",
+    "Target": "for review — no enforced target", "DefaultChecked": true,
+    "Script": "changes/Windows Changes/2R.1_NvidiaContainerServices-ReportOnly.ps1" },
 
   { "Id": "2B.1", "Level": 2, "Module": "Filesystem (L2)", "Name": "Disk write caching ON for all fixed disks",
     "Desc": "Found silently OFF on the reference rig — a large invisible I/O penalty. Missing value = Windows default (on). Needs reboot; re-verify after driver/Windows updates.",
