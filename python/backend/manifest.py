@@ -68,7 +68,7 @@ def build_dynamic_startup_items(discovered: list[dict]) -> list[CatalogItem]:
 
 
 def load_catalog(tool_key: str) -> list[CatalogItem]:
-    """FPS: manifest.json only (52 static items, no subprocess). Startup:
+    """FPS: manifest.json only (54 static items, no subprocess). Startup:
     manifest.json's static Windows Extras + one live Enumerate.ps1 call for
     the PC-specific Run keys/shortcuts/logon tasks — never N calls for N items.
     """

@@ -95,6 +95,14 @@ Legend: 🟢 = no functional loss · 🟡 = removes a feature some users need (g
 
 **Revert:** logged prior values restored.
 
+### Module: Graphics
+
+| # | Change | Why | How |
+|---|---|---|---|
+| 1.20 🟢 | Hardware-accelerated GPU Scheduling ON | Offloads scheduling to the GPU instead of Windows — recommended for modern GPUs/drivers, small latency win | `HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers` → `HwSchMode=2`. **Takes effect after reboot.** |
+
+**Revert:** logged prior value restored (still needs a reboot to take effect).
+
 ---
 
 ## LEVEL 2 — DEBLOAT
@@ -129,6 +137,8 @@ Legend: 🟢 = no functional loss · 🟡 = removes a feature some users need (g
 **⚠️ Anticheat/launcher rule (learned the hard way):** EA `EABackgroundService`/`EAAntiCheatService`, BattlEye `BEService`, EasyAntiCheat, Riot `vgc` → **Manual, never Disabled.** Disabling `EABackgroundService` silently broke EA-published Steam games (launch handoff fails with no useful error). Manual keeps them dormant until their game actually runs. The module detects these and normalizes them to Manual only.
 
 **Revert:** prior `StartType` logged and restored per service.
+
+**⚠️ NVIDIA container services (2R.1, report-only):** `NvContainerLocalSystem` / `NVDisplay.ContainerLocalSystem` look like telemetry/bloat services at a glance (similar naming shape to `DiagTrack`), but they host real NVIDIA Control Panel / driver-settings-persistence functionality — unlike `DiagTrack`, there's no version of disabling these that's safe. This item only **reports** current status/start-type for a human to judge; it's never apply-eligible by design (same pattern as 2A.4 below).
 
 ### Module: App / Appx Removal
 
