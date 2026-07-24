@@ -16,3 +16,4 @@ python/frontend/node_modules/
 # dist/ already covered by the root rule above
 python/build/
 python/version_info.txt
+python/*.zip
