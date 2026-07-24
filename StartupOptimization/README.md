@@ -1,12 +1,12 @@
 # StartupOptimization
 
-**Status: dry-run.** The startup-junk tool of the [PrimePCTuner](../README.md) suite, aimed at **everyday PCs, not gaming rigs** — the toned-down cleaner. Same pattern as FPSOptimization: detect, list every removal as a checkbox, auto-scan on launch, dry-run first.
+**Status: scan + apply + undo, all wired into the UI.** The startup-junk tool of the [PrimePCTuner](../README.md) suite, aimed at **everyday PCs, not gaming rigs** — the toned-down cleaner. Same pattern as FPSOptimization: detect, list every removal as a checkbox. No scan runs automatically — press Scan to check current state vs target (saves a report to `logs\`); Apply fires only after an explicit confirmation modal (creates a System Restore Point first, logs every change for undo); Undo reverts the most recent apply run, whole-run only.
 
 Launch the suite app — see the root [README](../README.md#start-here-the-app). This folder holds the catalog (`manifest.json` + live discovery via `..\changes\PC Startup\Enumerate.ps1`); the UI lives in `..\python\`.
 
 ## How it differs from FPSOptimization
 
-The FPS catalog is a **static, verified baseline** (the same 52 checks on every PC). This tool's checklist is a mix:
+The FPS catalog is a **static, verified baseline** (the same 54 checks on every PC). This tool's checklist is a mix:
 
 - **STARTUP APPS** and **LOGON TASKS** are **discovered live at launch** — `..\changes\PC Startup\Enumerate.ps1` enumerates whatever is actually set to start on *this* PC, so those two groups differ on every machine.
 - **WINDOWS EXTRAS** turned out to be mostly static, not PC-specific — several of its items (Copilot, `aimgr`, Widgets package/policy, Edge background boost) are the *exact same* checks FPS Optimizer already has, so they come from `manifest.json` and share the canonical script under `..\changes\Windows Changes\` rather than being duplicated.
@@ -29,7 +29,7 @@ Known-good entries are recognized and start **unchecked** with a note explaining
 
 ## Guardrails
 
-- **Dry run only in v0.1** — the scan shows current state vs. target; nothing is changed. Reports are written to `logs\`.
+- **Nothing changes without Scan → Apply → confirm.** Scan shows current state vs. target only; Apply is a separate, explicitly-confirmed step. Reports are written to `logs\`.
 - **Anticheat aware:** kernel anticheat *services* are out of scope here (that's FPSOptimization's domain, with its Manual-never-Disabled rule); only the tray-app Run entry is listed.
 - **StartupApproved gotcha handled:** value names can carry trailing spaces — matching is done on exact registry names, not trimmed ones.
 - **Drift-aware by design:** vendors re-add their entries on every update; because the catalog is enumerated fresh each launch, whatever came back simply shows up again as PENDING.
